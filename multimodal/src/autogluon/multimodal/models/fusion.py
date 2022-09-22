@@ -243,7 +243,6 @@ class MultimodalFusionTransformer(nn.Module):
         head_normalization: Optional[str] = "layer_norm",
         adapt_in_features: Optional[str] = None,
         loss_weight: Optional[float] = None,
-        pretrain: Optional[bool] = False,
     ):
         super().__init__()
         logger.debug("initializing MultimodalFusionTransformer")
@@ -300,7 +299,7 @@ class MultimodalFusionTransformer(nn.Module):
             normalization=head_normalization,
         )
 
-        self.pretrain_ = False
+        self.pretrain = False
         self.pretrain_head = FT_Transformer.Head(
             d_in=in_features,
             d_out=in_features,
@@ -350,7 +349,7 @@ class MultimodalFusionTransformer(nn.Module):
         multimodal_features = self.cls_token(multimodal_features)
         features = self.fusion_transformer(multimodal_features)
 
-        logits = self.pretrain_head(features) if self.pretrain_ else self.head(features)
+        logits = self.pretrain_head(features) if self.pretrain else self.head(features)
         fusion_output = {
             self.prefix: {
                 LOGITS: logits,
@@ -407,3 +406,6 @@ class MultimodalFusionTransformer(nn.Module):
             assert n in name_to_id
 
         return name_to_id
+
+    def set_pretrain_status(self, is_pretrain=False):
+        self.pretrain = is_pretrain

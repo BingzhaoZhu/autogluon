@@ -178,5 +178,4 @@ model:
     normalization: "layer_norm"
     ffn_activation: "geglu"
     head_activation: "relu"
-    pretrain: False
     data_types:

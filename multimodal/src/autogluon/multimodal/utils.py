@@ -235,6 +235,7 @@ def get_config(
     config: Optional[Union[dict, DictConfig]] = None,
     overrides: Optional[Union[str, List[str], Dict]] = None,
     is_distill: Optional[bool] = False,
+    is_pretrain: Optional[bool] = False,
 ):
     """
     Construct configurations for model, data, optimization, and environment.
@@ -289,6 +290,9 @@ def get_config(
     is_distill
         Whether in the distillation mode.
 
+    is_pretrain
+        Whether in the pretrain mode.
+
     Returns
     -------
     Configurations as a DictConfig object
@@ -300,7 +304,7 @@ def get_config(
         presets = "default"
 
     if not isinstance(config, DictConfig):
-        basic_config = get_basic_automm_config(is_distill=is_distill)
+        basic_config = get_basic_automm_config(is_distill=is_distill, is_pretrain=is_pretrain)
         if presets is None:
             preset_overrides = None
         else:
@@ -891,7 +895,6 @@ def create_model(
             head_activation=model_config.head_activation,
             adapt_in_features=model_config.adapt_in_features,
             loss_weight=model_config.weight if hasattr(model_config, "weight") else None,
-            pretrain=model_config.pretrain,
         )
     else:
         raise ValueError(f"unknown model name: {model_name}")

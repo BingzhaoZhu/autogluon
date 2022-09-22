@@ -58,6 +58,7 @@ from .constants import (
     PROBABILITY,
     RAY_TUNE_CHECKPOINT,
     REGRESSION,
+    PRETRAINER,
     TEXT,
     UNIFORM_SOUP,
     Y_PRED,
@@ -841,11 +842,14 @@ class MultiModalPredictor:
         if self._config is not None:  # continuous training
             config = self._config
 
+        is_pretrain = hyperparameters.pop(PRETRAINER) if PRETRAINER in hyperparameters else False
+
         config = get_config(
             presets=presets,
             config=config,
             overrides=hyperparameters,
             is_distill=teacher_predictor is not None,
+            is_pretrain=is_pretrain,
         )
 
         config = update_config_by_rules(
@@ -1006,10 +1010,6 @@ class MultiModalPredictor:
         )
         is_distill = teacher_model is not None
         is_match = hasattr(config, MATCHER)
-        try:
-            is_pretrain = model.pretrain
-        except:
-            is_pretrain = False
         assert not (is_distill and is_match), "Can't do distillation and matching simultaneously"
         if is_distill:
             output_feature_loss_weight = OmegaConf.select(
@@ -1051,11 +1051,6 @@ class MultiModalPredictor:
             if is_pretrain:
                 pretrain_task = PretrainerLitModule(
                     model=model,
-                    loss_func=loss_func,
-                    efficient_finetune=OmegaConf.select(config, "optimization.efficient_finetune"),
-                    mixup_fn=mixup_fn,
-                    mixup_off_epoch=OmegaConf.select(config, "data.mixup.turn_off_epoch"),
-                    trainable_param_names=OmegaConf.select(config, "optimization.trainable_param_names", default=None),
                     **metrics_kwargs,
                     **optimization_kwargs,
                 )
@@ -1184,8 +1179,8 @@ class MultiModalPredictor:
                     strategy=strategy,
                     benchmark=False,
                     deterministic=config.env.deterministic,
-                    max_epochs=config.optimization.max_epochs,
-                    max_steps=config.optimization.max_steps,
+                    max_epochs=config.pretrainer.max_epochs,
+                    max_steps=config.pretrainer.max_steps,
                     max_time=max_time,
                     # callbacks=callbacks,
                     logger=tb_logger,
@@ -1242,13 +1237,14 @@ class MultiModalPredictor:
             )
             warnings.filterwarnings("ignore", "Checkpoint directory .* exists and is not empty.")
             if is_pretrain:
-                model.pretrain_ = True
+                model.set_pretrain_status(is_pretrain=True)
                 pretrainer.fit(
                     pretrain_task,
                     datamodule=train_dm,
                     ckpt_path=ckpt_path if resume else None,  # this is to resume training that was broken accidentally
                 )
-                model.pretrain_ = False
+                model.set_pretrain_status(is_pretrain=False)
+
             trainer.fit(
                 task,
                 datamodule=train_dm,

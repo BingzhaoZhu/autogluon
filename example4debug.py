@@ -94,14 +94,14 @@ def train(args):
     hyperparameters['FT_TRANSFORMER'] = {"env.num_gpus": args.num_gpus,
                                          "env.num_workers": args.num_workers,
                                          "env.per_gpu_batch_size": 64,
-                                         "model.fusion_transformer.pretrain": False,
+                                         "pretrainer": True,
                                          }
     predictor = TabularPredictor(label=label,
                                  eval_metric=metric)
     predictor.fit(
         train_data=df_train,
         hyperparameters=hyperparameters,
-        time_limit=900,)
+        time_limit=30,)
     predictor.predict(df_test)
     leaderboard = predictor.leaderboard(df_test)
     leaderboard.to_csv("./leaderboard.csv")

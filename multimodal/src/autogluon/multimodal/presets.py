@@ -1,6 +1,6 @@
 from typing import Optional
 
-from .constants import DATA, DISTILLER, ENVIRONMENT, MODEL, OPTIMIZATION
+from .constants import DATA, DISTILLER, PRETRAINER, ENVIRONMENT, MODEL, OPTIMIZATION
 from .registry import Registry
 
 automm_presets = Registry("automm_presets")
@@ -149,7 +149,7 @@ def list_automm_presets(verbose: bool = False):
     return preset_details
 
 
-def get_basic_automm_config(is_distill: Optional[bool] = False):
+def get_basic_automm_config(is_distill: Optional[bool] = False, is_pretrain: Optional[bool] = False):
     """
     Get the basic config of AutoMM.
 
@@ -170,6 +170,9 @@ def get_basic_automm_config(is_distill: Optional[bool] = False):
     }
     if is_distill:
         config[DISTILLER] = "default"
+
+    if is_pretrain:
+        config[PRETRAINER] = "default"
 
     return config
 
