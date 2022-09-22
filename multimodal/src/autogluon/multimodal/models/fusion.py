@@ -300,14 +300,14 @@ class MultimodalFusionTransformer(nn.Module):
             normalization=head_normalization,
         )
 
-        self.pretrain = pretrain
+        self.pretrain_ = False
         self.pretrain_head = FT_Transformer.Head(
             d_in=in_features,
             d_out=in_features,
             bias=True,
             activation=head_activation,
             normalization=head_normalization,
-        ) if self.pretrain else None
+        ) #if self.pretrain else None
 
         self.cls_token = CLSToken(
             d_token=in_features,
@@ -350,8 +350,7 @@ class MultimodalFusionTransformer(nn.Module):
         multimodal_features = self.cls_token(multimodal_features)
         features = self.fusion_transformer(multimodal_features)
 
-        logits = self.pretrain_head(features) if self.pretrain else self.head(features)
-        print(logits.size())
+        logits = self.pretrain_head(features) if self.pretrain_ else self.head(features)
         fusion_output = {
             self.prefix: {
                 LOGITS: logits,

@@ -284,26 +284,11 @@ class PretrainerLitModule(pl.LightningModule):
             lr=self.hparams.lr,
             weight_decay=self.hparams.weight_decay,
         )
-        if self.hparams.lr_choice == "two_stages":
-            logger.debug("applying 2-stage learning rate...")
-            grouped_parameters = apply_two_stages_lr(
-                lr_mult=self.hparams.lr_mult,
-                return_params=True,
-                **kwargs,
-            )
-        elif self.hparams.lr_choice == "layerwise_decay":
-            logger.debug("applying layerwise learning rate decay...")
-            grouped_parameters = apply_layerwise_lr_decay(
-                lr_decay=self.hparams.lr_decay,
-                efficient_finetune=self.hparams.efficient_finetune,
-                trainable_param_names=self.hparams.trainable_param_names,
-                **kwargs,
-            )
-        else:
-            logger.debug("applying single learning rate...")
-            grouped_parameters = apply_single_lr(
-                **kwargs,
-            )
+
+        logger.debug("applying single learning rate...")
+        grouped_parameters = apply_single_lr(
+            **kwargs,
+        )
 
         optimizer = get_optimizer(
             optim_type=self.hparams.optim_type,

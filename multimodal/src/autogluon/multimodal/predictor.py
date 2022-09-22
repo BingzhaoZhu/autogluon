@@ -1006,6 +1006,10 @@ class MultiModalPredictor:
         )
         is_distill = teacher_model is not None
         is_match = hasattr(config, MATCHER)
+        try:
+            is_pretrain = model.pretrain
+        except:
+            is_pretrain = False
         assert not (is_distill and is_match), "Can't do distillation and matching simultaneously"
         if is_distill:
             output_feature_loss_weight = OmegaConf.select(
@@ -1044,6 +1048,18 @@ class MultiModalPredictor:
                 **optimization_kwargs,
             )
         else:
+            if is_pretrain:
+                pretrain_task = PretrainerLitModule(
+                    model=model,
+                    loss_func=loss_func,
+                    efficient_finetune=OmegaConf.select(config, "optimization.efficient_finetune"),
+                    mixup_fn=mixup_fn,
+                    mixup_off_epoch=OmegaConf.select(config, "data.mixup.turn_off_epoch"),
+                    trainable_param_names=OmegaConf.select(config, "optimization.trainable_param_names", default=None),
+                    **metrics_kwargs,
+                    **optimization_kwargs,
+                )
+
             task = LitModule(
                 model=model,
                 loss_func=loss_func,
@@ -1159,6 +1175,35 @@ class MultiModalPredictor:
         blacklist_msgs = ["already configured with model summary"]
         log_filter = LogFilter(blacklist_msgs)
         with apply_log_filter(log_filter):
+            if is_pretrain:
+                pretrainer = pl.Trainer(
+                    gpus=num_gpus if not use_ray_lightning else None,  # ray lightning requires not specifying gpus
+                    auto_select_gpus=config.env.auto_select_gpus if num_gpus != 0 else False,
+                    num_nodes=config.env.num_nodes,
+                    precision=precision,
+                    strategy=strategy,
+                    benchmark=False,
+                    deterministic=config.env.deterministic,
+                    max_epochs=config.optimization.max_epochs,
+                    max_steps=config.optimization.max_steps,
+                    max_time=max_time,
+                    # callbacks=callbacks,
+                    logger=tb_logger,
+                    gradient_clip_val=OmegaConf.select(config, "optimization.gradient_clip_val", default=1),
+                    gradient_clip_algorithm=OmegaConf.select(
+                        config, "optimization.gradient_clip_algorithm", default="norm"
+                    ),
+                    accumulate_grad_batches=grad_steps,
+                    log_every_n_steps=OmegaConf.select(config, "optimization.log_every_n_steps", default=10),
+                    enable_progress_bar=enable_progress_bar,
+                    fast_dev_run=config.env.fast_dev_run,
+                    track_grad_norm=OmegaConf.select(config, "optimization.track_grad_norm", default=-1),
+                    val_check_interval=config.optimization.val_check_interval,
+                    check_val_every_n_epoch=config.optimization.check_val_every_n_epoch
+                    if hasattr(config.optimization, "check_val_every_n_epoch")
+                    else 1,
+                    reload_dataloaders_every_n_epochs=1,
+                )
             trainer = pl.Trainer(
                 gpus=num_gpus if not use_ray_lightning else None,  # ray lightning requires not specifying gpus
                 auto_select_gpus=config.env.auto_select_gpus if num_gpus != 0 else False,
@@ -1196,6 +1241,14 @@ class MultiModalPredictor:
                 ".* in the `DataLoader` init to improve performance.*",
             )
             warnings.filterwarnings("ignore", "Checkpoint directory .* exists and is not empty.")
+            if is_pretrain:
+                model.pretrain_ = True
+                pretrainer.fit(
+                    pretrain_task,
+                    datamodule=train_dm,
+                    ckpt_path=ckpt_path if resume else None,  # this is to resume training that was broken accidentally
+                )
+                model.pretrain_ = False
             trainer.fit(
                 task,
                 datamodule=train_dm,
