@@ -891,6 +891,7 @@ def create_model(
             head_activation=model_config.head_activation,
             adapt_in_features=model_config.adapt_in_features,
             loss_weight=model_config.weight if hasattr(model_config, "weight") else None,
+            pretrain=model_config.pretrain,
         )
     else:
         raise ValueError(f"unknown model name: {model_name}")
