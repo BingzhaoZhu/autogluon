@@ -1241,7 +1241,6 @@ class MultiModalPredictor:
                 pretrainer.fit(
                     pretrain_task,
                     datamodule=train_dm,
-                    ckpt_path=ckpt_path if resume else None,  # this is to resume training that was broken accidentally
                 )
                 model.set_pretrain_status(is_pretrain=False)
 
