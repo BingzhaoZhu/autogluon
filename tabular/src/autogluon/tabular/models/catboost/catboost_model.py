@@ -28,7 +28,7 @@ class ContrastiveTransformations():
         self.cat_features = list(X.select_dtypes(include='category').columns)
         self.sample_weight = sample_weight
 
-    def random_perm(self, corruption_rate=0.6):
+    def random_perm(self, corruption_rate=0.3):
         X = copy.deepcopy(self.X)
         n, m = X.shape
         corruption_len = int(n * corruption_rate)
@@ -237,18 +237,14 @@ class CatBoostModel(AbstractModel):
             fit_final_kwargs['use_best_model'] = True
 
         is_pretrain = params.pop('pretrainer') if 'pretrainer' in params else False
-        from catboost import sum_models
         if is_pretrain:
-            # fit_final_kwargs.pop('callbacks')
             params_head = copy.deepcopy(params)
             max_iteration = params['iterations']
-            params['iterations'] = 10
+            params['iterations'] = 100
             params_head['iterations'] = max_iteration
             self.model = model_type(**params)
             dummy = model_type(**params_head)
-            # dummy.fit(X, **fit_final_kwargs)
-            # val_acc = dummy.best_score_['validation']['Accuracy']
-            for _ in range(10):
+            for _ in range(1):
                 X_aug = contrastive_transformer.random_perm()
                 self.model.fit(X_aug,
                                init_model=None if _ == 0 else self.model,
@@ -256,24 +252,22 @@ class CatBoostModel(AbstractModel):
                                verbose=False,
                                use_best_model=False,
                                )
-                print(self.model.tree_count_)
 
             dummy.fit(X,
                       init_model=self.model,
+                      # eval_set=eval_set,
+                      # verbose=False,
+                      # use_best_model=False,
                       **fit_final_kwargs
                       )
-                # print(dummy.best_score_['validation']['Accuracy'])
-                # if dummy.best_score_['validation']['Accuracy'] < val_acc:
-                #     break
-
             self.model = dummy
-            print(self.model.tree_count_)
 
         else:
             self.model = model_type(**params)
             self.model.fit(X, **fit_final_kwargs)
 
         self.params_trained['iterations'] = self.model.tree_count_
+        print(self.model.tree_count_)
 
     # FIXME: This logic is a hack made to maintain compatibility with GPU CatBoost.
     #  GPU CatBoost does not support callbacks or custom metrics.
