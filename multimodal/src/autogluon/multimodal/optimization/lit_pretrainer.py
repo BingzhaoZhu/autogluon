@@ -84,7 +84,7 @@ class ContrastiveTransformations:
         batch = copy.deepcopy(batch)
         return batch
 
-    def random_perm(self, batch, corruption_rate=0.6):
+    def random_perm(self, batch, corruption_rate=0.4):
         batch = copy.deepcopy(batch)
         batch_size, = batch[self.model.label_key].size()
         corruption_len = int(batch_size * corruption_rate)

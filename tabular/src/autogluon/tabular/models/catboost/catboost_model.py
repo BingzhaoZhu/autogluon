@@ -1,3 +1,4 @@
+import copy
 import logging
 import os
 import time
@@ -18,6 +19,33 @@ from .hyperparameters.parameters import get_param_baseline
 from .hyperparameters.searchspaces import get_default_searchspace
 
 logger = logging.getLogger(__name__)
+
+class ContranstiveTransformer():
+    def __init__(self, X, y, process_fn, sample_weight):
+        self.X = X
+        self.y = y
+        self.process_fn = process_fn
+        self.cat_features = list(X.select_dtypes(include='category').columns)
+        self.sample_weight = sample_weight
+
+    def random_perm(self, corruption_rate=0.4):
+        X = copy.deepcopy(self.X)
+        n, m = X.shape
+        corruption_len = int(n * corruption_rate)
+        for column in X:
+            random_idx = np.random.randint(low=0, high=n, size=(n,))
+            random_idx = random_idx[:corruption_len]
+            X[column].iloc[random_idx] = X[column].sample(n=corruption_len).values
+        return self.to_pool(X)
+
+    def identical(self):
+        X = copy.deepcopy(self.X)
+        return self.to_pool(X)
+
+    def to_pool(self, X):
+        from catboost import Pool
+        X = self.process_fn(X)
+        return Pool(data=X, label=self.y, cat_features=self.cat_features, weight=self.sample_weight)
 
 
 # TODO: Consider having CatBoost variant that converts all categoricals to numerical as done in RFModel, was showing improved results in some problems.
@@ -93,6 +121,8 @@ class CatBoostModel(AbstractModel):
         num_rows_train = len(X)
         num_cols_train = len(X.columns)
         num_classes = self.num_classes if self.num_classes else 1  # self.num_classes could be None after initialization if it's a regression problem
+
+        contrastive_transformer = ContranstiveTransformer(X, y, self.preprocess, sample_weight)
 
         X = self.preprocess(X)
         cat_features = list(X.select_dtypes(include='category').columns)
@@ -194,8 +224,6 @@ class CatBoostModel(AbstractModel):
                 elif isinstance(early_stopping_rounds, tuple):
                     extra_fit_kwargs['early_stopping_rounds'] = 50
 
-        self.model = model_type(**params)
-
         # TODO: Custom metrics don't seem to work anymore
         # TODO: Custom metrics not supported in GPU mode
         # TODO: Callbacks not supported in GPU mode
@@ -208,7 +236,42 @@ class CatBoostModel(AbstractModel):
         if eval_set is not None:
             fit_final_kwargs['use_best_model'] = True
 
-        self.model.fit(X, **fit_final_kwargs)
+        is_pretrain = params.pop('pretrainer') if 'pretrainer' in params else False
+        from catboost import sum_models
+        if is_pretrain:
+            # fit_final_kwargs.pop('callbacks')
+            params_head = copy.deepcopy(params)
+            max_iteration = params['iterations']
+            params['iterations'] = 10
+            params_head['iterations'] = max_iteration
+            self.model = model_type(**params)
+            dummy = model_type(**params_head)
+            # dummy.fit(X, **fit_final_kwargs)
+            # val_acc = dummy.best_score_['validation']['Accuracy']
+            for _ in range(10):
+                X_aug = contrastive_transformer.random_perm()
+                self.model.fit(X_aug,
+                               init_model=None if _ == 0 else self.model,
+                               eval_set=eval_set,
+                               verbose=False,
+                               use_best_model=False,
+                               )
+                print(self.model.tree_count_)
+
+            dummy.fit(X,
+                      init_model=self.model,
+                      **fit_final_kwargs
+                      )
+                # print(dummy.best_score_['validation']['Accuracy'])
+                # if dummy.best_score_['validation']['Accuracy'] < val_acc:
+                #     break
+
+            self.model = dummy
+            print(self.model.tree_count_)
+
+        else:
+            self.model = model_type(**params)
+            self.model.fit(X, **fit_final_kwargs)
 
         self.params_trained['iterations'] = self.model.tree_count_
 

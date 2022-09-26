@@ -91,17 +91,20 @@ def train(args):
 
     metric = "accuracy"
     hyperparameters = {} if args.mode == "FT_Transformer" else get_hyperparameter_config('default')
-    hyperparameters['FT_TRANSFORMER'] = {"env.num_gpus": args.num_gpus,
-                                         "env.num_workers": args.num_workers,
-                                         "env.per_gpu_batch_size": 64,
-                                         "pretrainer": True,
-                                         }
+    # hyperparameters['FT_TRANSFORMER'] = {"env.num_gpus": args.num_gpus,
+    #                                      "env.num_workers": args.num_workers,
+    #                                      "env.per_gpu_batch_size": 64,
+    #                                      "pretrainer": True,
+    #                                      }
+    hyperparameters['CAT'] = {"pretrainer": True}
+
     predictor = TabularPredictor(label=label,
                                  eval_metric=metric)
     predictor.fit(
         train_data=df_train,
         hyperparameters=hyperparameters,
-        time_limit=30,)
+        holdout_frac=0.125,
+        time_limit=300,)
     predictor.predict(df_test)
     leaderboard = predictor.leaderboard(df_test)
     leaderboard.to_csv("./leaderboard.csv")
