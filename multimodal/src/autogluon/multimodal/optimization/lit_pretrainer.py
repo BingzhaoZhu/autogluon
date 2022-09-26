@@ -64,7 +64,7 @@ class NTXent(nn.Module):
 
 
 class ContrastiveTransformations:
-    def __init__(self, model, mode="identical"):
+    def __init__(self, model, mode="random_perm"):
         self.model = model
         self.mode = mode
 
@@ -84,7 +84,34 @@ class ContrastiveTransformations:
         batch = copy.deepcopy(batch)
         return batch
 
-    def random_perm(self, batch, corruption_rate=0.4):
+    def random_perm(self, batch, corruption_rate=0.6):
+        batch = copy.deepcopy(batch)
+        batch_size, = batch[self.model.label_key].size()
+        corruption_len = int(batch_size * corruption_rate)
+        for permodel in self.model.model:
+            if hasattr(permodel, "categorical_key"):
+                categorical_features = []
+                for categorical_feature in batch[permodel.categorical_key]:
+                    random_idx = torch.randint(high=batch_size, size=(batch_size,))
+                    random_sample = categorical_feature[random_idx]
+                    corruption_idx = torch.randperm(batch_size)[:corruption_len]
+                    corruption_mask = torch.zeros_like(categorical_feature, dtype=torch.bool)
+                    corruption_mask[corruption_idx] = True
+                    positive = torch.where(corruption_mask, random_sample, categorical_feature)
+                    categorical_features.append(positive)
+                batch[permodel.categorical_key] = tuple(categorical_features)
+            if hasattr(permodel, "numerical_key"):
+                numerical_features = batch[permodel.numerical_key]
+                _, m = numerical_features.size()
+                indices = torch.argsort(torch.rand(*numerical_features.shape), dim=0)
+                random_sample = numerical_features[indices, torch.arange(m).unsqueeze(0)]
+                corruption_mask = torch.zeros_like(numerical_features, dtype=torch.bool)
+                for i in range(m):
+                    corruption_idx = torch.randperm(batch_size)[:corruption_len]
+                    corruption_mask[corruption_idx, i] = True
+                batch[permodel.numerical_key] = torch.where(corruption_mask, random_sample, numerical_features)
+
+    def random_perm_col(self, batch, corruption_rate=0.4):
         batch = copy.deepcopy(batch)
         batch_size, = batch[self.model.label_key].size()
         corruption_len = int(batch_size * corruption_rate)

@@ -20,7 +20,7 @@ from .hyperparameters.searchspaces import get_default_searchspace
 
 logger = logging.getLogger(__name__)
 
-class ContranstiveTransformer():
+class ContrastiveTransformations():
     def __init__(self, X, y, process_fn, sample_weight):
         self.X = X
         self.y = y
@@ -122,7 +122,7 @@ class CatBoostModel(AbstractModel):
         num_cols_train = len(X.columns)
         num_classes = self.num_classes if self.num_classes else 1  # self.num_classes could be None after initialization if it's a regression problem
 
-        contrastive_transformer = ContranstiveTransformer(X, y, self.preprocess, sample_weight)
+        contrastive_transformer = ContrastiveTransformations(X, y, self.preprocess, sample_weight)
 
         X = self.preprocess(X)
         cat_features = list(X.select_dtypes(include='category').columns)
