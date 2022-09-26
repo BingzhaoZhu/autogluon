@@ -28,7 +28,7 @@ class ContrastiveTransformations():
         self.cat_features = list(X.select_dtypes(include='category').columns)
         self.sample_weight = sample_weight
 
-    def random_perm(self, corruption_rate=0.4):
+    def random_perm(self, corruption_rate=0.6):
         X = copy.deepcopy(self.X)
         n, m = X.shape
         corruption_len = int(n * corruption_rate)
