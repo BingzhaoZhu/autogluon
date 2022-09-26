@@ -110,6 +110,7 @@ class ContrastiveTransformations:
                     corruption_idx = torch.randperm(batch_size)[:corruption_len]
                     corruption_mask[corruption_idx, i] = True
                 batch[permodel.numerical_key] = torch.where(corruption_mask, random_sample, numerical_features)
+        return batch
 
     def random_perm_col(self, batch, corruption_rate=0.4):
         batch = copy.deepcopy(batch)
