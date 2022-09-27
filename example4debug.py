@@ -97,7 +97,8 @@ def train(args):
     #                                      "pretrainer": True,
     #                                      }
     hyperparameters['CAT'] = {"pretrainer": True,
-                              "random_seed": 10}
+                              "random_seed": 10,
+                              "ag.early_stop": 3}
 
     predictor = TabularPredictor(label=label,
                                  eval_metric=metric)
