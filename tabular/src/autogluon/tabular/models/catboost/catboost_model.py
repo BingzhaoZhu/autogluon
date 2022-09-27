@@ -28,7 +28,16 @@ class ContrastiveTransformations():
         self.cat_features = list(X.select_dtypes(include='category').columns)
         self.sample_weight = sample_weight
 
-    def random_perm(self, corruption_rate=0.1):
+    def random_block(self, corruption_rate=0.3):
+        X = copy.deepcopy(self.X)
+        for column in X:
+            if np.random.uniform() < corruption_rate:
+                dtype = X.dtypes[column]
+                X[column] = X[column].mode()[0]
+                X[column] = X[column].astype(dtype)
+        return self.to_pool(X)
+
+    def random_perm(self, corruption_rate=0.3):
         X = copy.deepcopy(self.X)
         n, m = X.shape
         corruption_len = int(n * corruption_rate)
@@ -42,10 +51,11 @@ class ContrastiveTransformations():
         X = copy.deepcopy(self.X)
         return self.to_pool(X)
 
-    def to_pool(self, X):
+    def to_pool(self, X, cat_features=None):
         from catboost import Pool
+        cat_features = self.cat_features if cat_features is None else cat_features
         X = self.process_fn(X)
-        return Pool(data=X, label=self.y, cat_features=self.cat_features, weight=self.sample_weight)
+        return Pool(data=X, label=self.y, cat_features=cat_features, weight=self.sample_weight)
 
 
 # TODO: Consider having CatBoost variant that converts all categoricals to numerical as done in RFModel, was showing improved results in some problems.
@@ -245,12 +255,12 @@ class CatBoostModel(AbstractModel):
             self.model = model_type(**params)
             dummy = model_type(**params_head)
             for _ in range(1):
-                X_aug = contrastive_transformer.random_perm()
+                X_aug = contrastive_transformer.random_block()
                 self.model.fit(X_aug,
                                init_model=None if _ == 0 else self.model,
-                               eval_set=eval_set,
+                               #eval_set=eval_set,
                                verbose=False,
-                               use_best_model=False,
+                               #use_best_model=False,
                                )
 
             dummy.fit(X,
