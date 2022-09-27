@@ -28,7 +28,7 @@ class ContrastiveTransformations():
         self.cat_features = list(X.select_dtypes(include='category').columns)
         self.sample_weight = sample_weight
 
-    def random_block(self, corruption_rate=0.6):
+    def random_block(self, corruption_rate=0.3):
         X = copy.deepcopy(self.X)
         for column in X:
             if np.random.uniform() < corruption_rate:
@@ -258,9 +258,9 @@ class CatBoostModel(AbstractModel):
                 X_aug = contrastive_transformer.random_block()
                 self.model.fit(X_aug,
                                init_model=None if _ == 0 else self.model,
-                               #eval_set=eval_set,
+                               eval_set=eval_set,
                                verbose=False,
-                               #use_best_model=False,
+                               use_best_model=True,
                                )
 
             dummy.fit(X,

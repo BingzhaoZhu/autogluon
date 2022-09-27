@@ -9,3 +9,4 @@ pretrainer:
   max_steps: -1
   warmup_steps: 0.1
   end_lr: 0
+  augmentation_type: random_perm
