@@ -28,7 +28,7 @@ class ContrastiveTransformations():
         self.cat_features = list(X.select_dtypes(include='category').columns)
         self.sample_weight = sample_weight
 
-    def random_block(self, corruption_rate=0.3):
+    def random_block(self, corruption_rate=0.6):
         X = copy.deepcopy(self.X)
         for column in X:
             if np.random.uniform() < corruption_rate:
