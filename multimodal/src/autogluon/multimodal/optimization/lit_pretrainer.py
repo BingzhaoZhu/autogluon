@@ -64,9 +64,11 @@ class NTXent(nn.Module):
 
 
 class ContrastiveTransformations:
-    def __init__(self, model, mode="random_block"):
+    def __init__(self, model, mode, problem_type, corruption_rate):
         self.model = model
-        self.mode = mode
+        self.mode = mode if mode is not None else "identical"
+        self.problem_type = problem_type
+        self.corruption_rate = corruption_rate
 
     def __call__(self, batch):
         if self.mode == "identical":
@@ -86,12 +88,18 @@ class ContrastiveTransformations:
         batch = copy.deepcopy(batch)
         return batch
 
-    def mixup(self, batch, lam):
-        from ..data.mixup import multimodel_mixup
+    def _mixup_regression(self, batch, lam):
+        mixup_label = batch[self.model.label_key]
 
-    def random_block(self, batch, corruption_rate=0.3):
+    def mixup(self, batch):
         batch = copy.deepcopy(batch)
-        print(batch[self.model.label_key])
+        lam = self.corruption_rate
+        return self._mixup_regression(batch, lam) if self.problem_type == "regression" else self._mixup_regression(batch, lam)
+
+
+    def random_block(self, batch):
+        corruption_rate = self.corruption_rate
+        batch = copy.deepcopy(batch)
         for permodel in self.model.model:
             if hasattr(permodel, "categorical_key"):
                 categorical_features = []
@@ -111,7 +119,8 @@ class ContrastiveTransformations:
                 batch[permodel.numerical_key] = numerical_features
         return batch
 
-    def random_perm(self, batch, corruption_rate=0.4):
+    def random_perm(self, batch):
+        corruption_rate = self.corruption_rate
         batch = copy.deepcopy(batch)
         batch_size, = batch[self.model.label_key].size()
         corruption_len = int(batch_size * corruption_rate)
@@ -172,6 +181,9 @@ class PretrainerLitModule(pl.LightningModule):
         trainable_param_names: Optional[List[str]] = None,
         mixup_fn: Optional[MixupModule] = None,
         mixup_off_epoch: Optional[int] = 0,
+        problem_type: Optional[str] = None,
+        augmentation_mode: Optional[str] = None,
+        corruption_rate: Optional[float] = None,
     ):
         """
         Parameters
@@ -239,17 +251,12 @@ class PretrainerLitModule(pl.LightningModule):
         super().__init__()
         self.save_hyperparameters(ignore=["model", "validation_metric", "test_metric", "loss_func"])
         self.model = model
-        self.validation_metric = validation_metric
-        self.validation_metric_name = f"val_{validation_metric_name}"
         self.loss_func = NTXent(temperature=1)
-        self.mixup_fn = mixup_fn
-        if isinstance(validation_metric, BaseAggregator) and custom_metric_func is None:
-            raise ValueError(
-                f"validation_metric {validation_metric} is an aggregation metric,"
-                "which must be used with a customized metric function."
-            )
-        self.custom_metric_func = custom_metric_func
-        self.contrastive_fn = ContrastiveTransformations(model)
+        self.contrastive_fn = ContrastiveTransformations(model,
+                                                         mode=augmentation_mode,
+                                                         problem_type=problem_type,
+                                                         corruption_rate=corruption_rate,
+                                                         )
 
     def _compute_loss(
         self,

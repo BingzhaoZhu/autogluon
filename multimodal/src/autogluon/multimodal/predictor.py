@@ -1049,10 +1049,22 @@ class MultiModalPredictor:
             )
         else:
             if is_pretrain:
+                pretrain_kwargs = dict(
+                    problem_type=self.problem_type,
+                    augmentation_mode=config.pretrainer.augmentation_type,
+                    corruption_rate=config.pretrainer.corruption_rate,
+                    optim_type=config.pretrainer.optim_type,
+                    lr_choice=config.pretrainer.lr_choice,
+                    lr_schedule=config.pretrainer.lr_schedule,
+                    lr=config.pretrainer.learning_rate,
+                    lr_decay=config.pretrainer.lr_decay,
+                    end_lr=config.pretrainer.end_lr,
+                    weight_decay=config.pretrainer.weight_decay,
+                    warmup_steps=config.pretrainer.warmup_steps,
+                )
                 pretrain_task = PretrainerLitModule(
                     model=model,
-                    **metrics_kwargs,
-                    **optimization_kwargs,
+                    **pretrain_kwargs,
                 )
 
             task = LitModule(
@@ -1193,10 +1205,10 @@ class MultiModalPredictor:
                     enable_progress_bar=enable_progress_bar,
                     fast_dev_run=config.env.fast_dev_run,
                     track_grad_norm=OmegaConf.select(config, "optimization.track_grad_norm", default=-1),
-                    val_check_interval=config.optimization.val_check_interval,
-                    check_val_every_n_epoch=config.optimization.check_val_every_n_epoch
-                    if hasattr(config.optimization, "check_val_every_n_epoch")
-                    else 1,
+                    # val_check_interval=config.optimization.val_check_interval,
+                    # check_val_every_n_epoch=config.optimization.check_val_every_n_epoch
+                    # if hasattr(config.optimization, "check_val_every_n_epoch")
+                    # else 1,
                     reload_dataloaders_every_n_epochs=1,
                 )
             trainer = pl.Trainer(

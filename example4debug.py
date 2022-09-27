@@ -95,18 +95,23 @@ def train(args):
                                          "env.num_workers": args.num_workers,
                                          "env.per_gpu_batch_size": 64,
                                          "pretrainer": True,
+                                         "pretrainer.augmentation_type": "random_perm",
+                                         "pretrainer.corruption_rate": 0.6,
                                          }
     # hyperparameters['CAT'] = {"pretrainer": True,
     #                           "random_seed": 10,
     #                           "ag.early_stop": 3}
 
     predictor = TabularPredictor(label=label,
-                                 eval_metric=metric)
+                                 eval_metric=metric,
+                                 #problem_type="regression",
+                                 )
     predictor.fit(
         train_data=df_train,
         hyperparameters=hyperparameters,
         holdout_frac=0.125,
-        time_limit=300,)
+        time_limit=30,
+    )
     predictor.predict(df_test)
     leaderboard = predictor.leaderboard(df_test)
     leaderboard.to_csv("./leaderboard.csv")
