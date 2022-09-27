@@ -250,11 +250,11 @@ class CatBoostModel(AbstractModel):
         if is_pretrain:
             params_head = copy.deepcopy(params)
             max_iteration = params['iterations']
-            params['iterations'] = 10
+            params['iterations'] = 1
             params_head['iterations'] = max_iteration
             self.model = model_type(**params)
             dummy = model_type(**params_head)
-            for _ in range(10):
+            for _ in range(100):
                 X_aug = contrastive_transformer.random_block()
                 self.model.fit(X_aug,
                                init_model=None if _ == 0 else self.model,
