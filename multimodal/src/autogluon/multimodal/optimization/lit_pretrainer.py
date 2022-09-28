@@ -88,15 +88,6 @@ class ContrastiveTransformations:
         batch = copy.deepcopy(batch)
         return batch
 
-    def _mixup_regression(self, batch, lam):
-        mixup_label = batch[self.model.label_key]
-
-    def mixup(self, batch):
-        batch = copy.deepcopy(batch)
-        lam = self.corruption_rate
-        return self._mixup_regression(batch, lam) if self.problem_type == "regression" else self._mixup_regression(batch, lam)
-
-
     def random_block(self, batch):
         corruption_rate = self.corruption_rate
         batch = copy.deepcopy(batch)
