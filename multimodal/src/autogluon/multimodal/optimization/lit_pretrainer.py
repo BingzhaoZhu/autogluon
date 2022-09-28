@@ -141,9 +141,6 @@ class ContrastiveTransformations:
         return batch
 
 
-
-
-
 class PretrainerLitModule(pl.LightningModule):
     """
     Control the loops for training, evaluation, and prediction. This module is independent of
