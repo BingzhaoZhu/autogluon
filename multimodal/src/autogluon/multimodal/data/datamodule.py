@@ -143,6 +143,7 @@ class BaseDataModule(LightningDataModule):
             num_workers=self.num_workers,
             pin_memory=False,
             collate_fn=self.get_collate_fn(),
+            shuffle=True,
         )
         return loader
 
@@ -162,6 +163,7 @@ class BaseDataModule(LightningDataModule):
             num_workers=self.num_workers,
             pin_memory=False,
             collate_fn=self.get_collate_fn(),
+            shuffle=True,
         )
         return loader
 
@@ -181,6 +183,7 @@ class BaseDataModule(LightningDataModule):
             num_workers=self.num_workers,
             pin_memory=False,
             collate_fn=self.get_collate_fn(),
+            shuffle=True,
         )
         return loader
 

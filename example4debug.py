@@ -93,7 +93,8 @@ def train(args):
     hyperparameters = {} if args.mode == "FT_Transformer" else get_hyperparameter_config('default')
     hyperparameters['FT_TRANSFORMER'] = {"env.num_gpus": 1,
                                          "env.per_gpu_batch_size": 128,
-                                         "env.eval_batch_size_ratio": 1,                                         "model.fusion_transformer.row_attention": True,
+                                         "env.eval_batch_size_ratio": 1,
+                                         "model.fusion_transformer.row_attention": True,
                                          "optimization.patience": 3,
                                          # "pretrainer": True,
                                          # "pretrainer.augmentation_type": "identical",
@@ -113,7 +114,11 @@ def train(args):
         holdout_frac=0.125,
         time_limit=3600,
     )
-    predictor.predict(df_test)
+
+    probabilities = predictor.predict_proba(df_test, as_multiclass=True)
+    predictions = probabilities.idxmax(axis=1).to_numpy()
+    from sklearn.metrics import roc_auc_score, accuracy_score
+    print("guaguaguagua", accuracy_score(df_test[label].to_numpy(), predictions))
     leaderboard = predictor.leaderboard(df_test)
     leaderboard.to_csv("./leaderboard.csv")
     return
