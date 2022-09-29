@@ -93,7 +93,7 @@ def train(args):
     hyperparameters = {} if args.mode == "FT_Transformer" else get_hyperparameter_config('default')
     hyperparameters['FT_TRANSFORMER'] = {"env.num_gpus": 1,
                                          "env.per_gpu_batch_size": 128,
-                                         "model.fusion_transformer.row_attention": True,
+                                         "env.eval_batch_size_ratio": 1,                                         "model.fusion_transformer.row_attention": True,
                                          "optimization.patience": 3,
                                          # "pretrainer": True,
                                          # "pretrainer.augmentation_type": "identical",
