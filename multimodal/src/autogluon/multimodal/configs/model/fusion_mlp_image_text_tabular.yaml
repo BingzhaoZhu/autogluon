@@ -179,3 +179,4 @@ model:
     ffn_activation: "geglu"
     head_activation: "relu"
     data_types:
+    row_attention: False

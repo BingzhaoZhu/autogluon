@@ -108,6 +108,7 @@ class CategoricalTransformer(nn.Module):
         kv_compression_sharing: Optional[str] = None,
         head_activation: Optional[str] = "relu",
         head_normalization: Optional[str] = "layer_norm",
+        row_attention: Optional[bool] = False,
     ) -> None:
         """
         Parameters
@@ -196,8 +197,8 @@ class CategoricalTransformer(nn.Module):
             else nn.Identity()
         )
 
-        if kv_compression_ratio is not None:
-            n_tokens = self.categorical_feature_tokenizer.n_tokens + 1
+        if kv_compression_ratio is not None or row_attention:
+            n_tokens = self.categorical_feature_tokenizer.n_tokens + 1 if self.cls_token else self.categorical_feature_tokenizer.n_tokens
         else:
             n_tokens = None
 
@@ -222,6 +223,7 @@ class CategoricalTransformer(nn.Module):
             head_activation=head_activation,
             head_normalization=head_normalization,
             d_out=out_features,
+            row_attention=row_attention,
         )
 
         self.head = FT_Transformer.Head(

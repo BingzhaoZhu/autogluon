@@ -382,6 +382,7 @@ class NumericalTransformer(nn.Module):
         head_activation: Optional[str] = "relu",
         head_normalization: Optional[str] = "layer_norm",
         embedding_arch: Optional[List[str]] = ["linear"],
+        row_attention: Optional[bool] = False,
     ):
         """
         Parameters
@@ -471,7 +472,7 @@ class NumericalTransformer(nn.Module):
             else nn.Identity()
         )
 
-        if kv_compression_ratio is not None:
+        if kv_compression_ratio is not None or row_attention:
             if self.cls_token:
                 n_tokens = self.numerical_feature_tokenizer.n_tokens + 1
             else:
@@ -500,6 +501,7 @@ class NumericalTransformer(nn.Module):
             head_activation=head_activation,
             head_normalization=head_normalization,
             d_out=out_features,
+            row_attention=row_attention,
         )
 
         self.head = FT_Transformer.Head(

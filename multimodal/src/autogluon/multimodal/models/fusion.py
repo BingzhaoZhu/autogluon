@@ -243,11 +243,18 @@ class MultimodalFusionTransformer(nn.Module):
         head_normalization: Optional[str] = "layer_norm",
         adapt_in_features: Optional[str] = None,
         loss_weight: Optional[float] = None,
+        row_attention: Optional[bool] = False,
+        n_tokens: Optional[int] = None,
     ):
         super().__init__()
         logger.debug("initializing MultimodalFusionTransformer")
         if loss_weight is not None:
             assert loss_weight > 0
+
+        if row_attention:
+            n_tokens = n_tokens + 1 if True else n_tokens  # cls_token is also True
+        else:
+            n_tokens = None
 
         self.loss_weight = loss_weight
         self.model = nn.ModuleList(models)
@@ -282,13 +289,14 @@ class MultimodalFusionTransformer(nn.Module):
             prenormalization=prenormalization,
             first_prenormalization=first_prenormalization,
             last_layer_query_idx=None,
-            n_tokens=None,
+            n_tokens=n_tokens,
             kv_compression_ratio=kv_compression_ratio,
             kv_compression_sharing=kv_compression_sharing,
             head_activation=head_activation,
             head_normalization=head_normalization,
             d_out=hidden_features,
             projection=False,
+            row_attention=row_attention,
         )
 
         self.head = FT_Transformer.Head(

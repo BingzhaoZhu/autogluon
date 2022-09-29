@@ -79,7 +79,7 @@ class ContrastiveTransformations:
             return self.random_block(batch)
         else:
             raise ValueError(
-                f"Current model {self.model} is not supported."
+                f"Current mode {self.mode} is not supported."
                 "Consider choosing from the following options:"
                 "identical, random_perm."
             )

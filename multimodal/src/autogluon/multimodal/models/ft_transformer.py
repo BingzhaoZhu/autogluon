@@ -341,6 +341,7 @@ class FT_Transformer(nn.Module):
             self.dropout = nn.Dropout(dropout)
             self.linear_second = nn.Linear(d_hidden, d_token, bias_second)
 
+
         def forward(self, x: Tensor) -> Tensor:
             x = self.linear_first(x)
             x = self.activation(x)
@@ -396,8 +397,13 @@ class FT_Transformer(nn.Module):
         head_normalization: ModuleType,
         d_out: int,
         projection: Optional[bool] = False,
+        row_attention: Optional[bool] = False,
     ) -> None:
         super().__init__()
+        if row_attention:
+            assert (
+                isinstance(n_tokens, int)
+            ), "If `row_attention` is True, n_tokens must be provided."
         if isinstance(last_layer_query_idx, int):
             raise ValueError(
                 "last_layer_query_idx must be None, list[int] or slice. "
@@ -407,7 +413,7 @@ class FT_Transformer(nn.Module):
             assert (
                 not first_prenormalization
             ), "If `prenormalization` is False, then `first_prenormalization` must be False"
-        assert _all_or_none([n_tokens, kv_compression_ratio, kv_compression_sharing]), (
+        assert _all_or_none([kv_compression_ratio, kv_compression_sharing]), (
             "If any of the following arguments is (not) None, then all of them must (not) be None: "
             "n_tokens, kv_compression_ratio, kv_compression_sharing"
         )
@@ -445,6 +451,7 @@ class FT_Transformer(nn.Module):
 
         self.prenormalization = prenormalization
         self.last_layer_query_idx = last_layer_query_idx
+        self.row_attention = row_attention
 
         self.blocks = nn.ModuleList([])
         for layer_idx in range(n_blocks):
@@ -479,6 +486,30 @@ class FT_Transformer(nn.Module):
                     layer["value_compression"] = make_kv_compression()
                 else:
                     assert kv_compression_sharing == "key-value", _INTERNAL_ERROR_MESSAGE
+
+            if row_attention:
+                layer.update(
+                    {
+                        "row_attention": MultiheadAttention(
+                            d_token=d_token * n_tokens,
+                            n_heads=attention_n_heads,
+                            dropout=attention_dropout,
+                            bias=True,
+                            initialization=attention_initialization,
+                        ),
+                        "row_ffn": FT_Transformer.FFN(
+                            d_token=d_token * n_tokens,
+                            d_hidden=ffn_d_hidden,
+                            bias_first=True,
+                            bias_second=True,
+                            dropout=ffn_dropout,
+                            activation=ffn_activation,
+                        ),
+                        "row_attention_residual_dropout": nn.Dropout(residual_dropout),
+                        "row_ffn_residual_dropout": nn.Dropout(residual_dropout),
+                        "row_output": nn.Identity(),  # for hooks-based introspection
+                    }
+                )
             self.blocks.append(layer)
 
         self.head = (
@@ -505,7 +536,10 @@ class FT_Transformer(nn.Module):
         )
 
     def _start_residual(self, layer, stage, x):
-        assert stage in ["attention", "ffn"], _INTERNAL_ERROR_MESSAGE
+        if not self.row_attention:
+            assert stage in ["attention", "ffn"], _INTERNAL_ERROR_MESSAGE
+        else:
+            assert stage in ["attention", "ffn", "row_attention", "row_ffn"], _INTERNAL_ERROR_MESSAGE
         x_residual = x
         if self.prenormalization:
             norm_key = f"{stage}_normalization"
@@ -514,7 +548,10 @@ class FT_Transformer(nn.Module):
         return x_residual
 
     def _end_residual(self, layer, stage, x, x_residual):
-        assert stage in ["attention", "ffn"], _INTERNAL_ERROR_MESSAGE
+        if not self.row_attention:
+            assert stage in ["attention", "ffn"], _INTERNAL_ERROR_MESSAGE
+        else:
+            assert stage in ["attention", "ffn", "row_attention", "row_ffn"], _INTERNAL_ERROR_MESSAGE
         x_residual = layer[f"{stage}_residual_dropout"](x_residual)
         x = x + x_residual
         if not self.prenormalization:
@@ -541,6 +578,32 @@ class FT_Transformer(nn.Module):
             x_residual = layer["ffn"](x_residual)
             x = self._end_residual(layer, "ffn", x, x_residual)
             x = layer["output"](x)
+
+            if self.row_attention:
+                batch_size, n_tokens, d_token = x.shape
+                x = (
+                    x.reshape(batch_size, n_tokens * d_token)
+                    .unsqueeze(0)
+                )
+
+                x_residual = self._start_residual(layer, "row_attention", x)
+                x_residual, _ = layer["row_attention"](
+                    x_residual,
+                    x_residual,
+                    None, None,
+                )
+                x = self._end_residual(layer, "row_attention", x, x_residual)
+
+                x_residual = self._start_residual(layer, "row_ffn", x)
+                x_residual = layer["row_ffn"](x_residual)
+                x = self._end_residual(layer, "row_ffn", x, x_residual)
+                x = layer["row_output"](x)
+
+                x = (
+                    x.squeeze(0)
+                    .reshape(batch_size, n_tokens, d_token)
+                )
+
 
         x = self.head(x)
 
