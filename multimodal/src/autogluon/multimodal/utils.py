@@ -53,6 +53,7 @@ from .constants import (
     FUSION_TRANSFORMER,
     HF_MODELS,
     HF_TEXT,
+    HIERARCHICAL_TRANSFORMER,
     IMAGE,
     LABEL,
     LAST_CHECKPOINT,
@@ -101,6 +102,7 @@ from .models import (
     NumericalTransformer,
     TFewModel,
     TimmAutoModelForImagePrediction,
+    HierarchicalTabularTransformer,
 )
 from .models.utils import inject_ia3_to_linear_layer, inject_lora_to_linear_layer
 from .presets import get_automm_presets, get_basic_automm_config
@@ -898,11 +900,53 @@ def create_model(
             row_attention=model_config.row_attention,
             n_tokens=num_numerical_columns+len(num_categories),
         )
+    elif model_name.lower().startswith(HIERARCHICAL_TRANSFORMER):
+        model = HierarchicalTabularTransformer(
+            prefix=model_name,
+            num_categories=num_categories,
+            num_numerical_columns=num_numerical_columns,
+            tokens_per_level=model_config.tokens_per_level,
+            num_sweeps=model_config.num_sweeps,
+        )
     else:
         raise ValueError(f"unknown model name: {model_name}")
 
     return model
 
+
+def create_hierarchical_model(
+    config: DictConfig,
+    num_classes: Optional[int] = None,
+    num_numerical_columns: Optional[int] = None,
+    num_categories: Optional[List[int]] = None,
+    pretrained: Optional[bool] = True,):
+
+    if HIERARCHICAL_TRANSFORMER not in config.model.names:
+        return create_fusion_model(config,
+                                   num_classes,
+                                   num_numerical_columns,
+                                   num_categories,
+                                   pretrained
+                                   )
+
+    config.model.names.remove(HIERARCHICAL_TRANSFORMER)
+    model = create_model(
+            model_name=HIERARCHICAL_TRANSFORMER,
+            model_config=getattr(config.model, HIERARCHICAL_TRANSFORMER),
+            num_classes=num_classes,
+            num_numerical_columns=num_numerical_columns,
+            num_categories=num_categories,
+            pretrained=pretrained,
+        )
+
+    model.set_node_model(create_fusion_model,
+                         config,
+                         num_classes,
+                         num_numerical_columns,
+                         num_categories,
+                         pretrained)
+
+    return model
 
 def create_fusion_model(
     config: DictConfig,

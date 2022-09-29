@@ -94,6 +94,7 @@ def train(args):
     hyperparameters['FT_TRANSFORMER'] = {"env.num_gpus": 1,
                                          "env.per_gpu_batch_size": 128,
                                          "model.fusion_transformer.row_attention": True,
+                                         "optimization.patience": 3,
                                          # "pretrainer": True,
                                          # "pretrainer.augmentation_type": "identical",
                                          # "pretrainer.corruption_rate": 0.6,
@@ -109,8 +110,8 @@ def train(args):
     predictor.fit(
         train_data=df_train,
         hyperparameters=hyperparameters,
-        # holdout_frac=0.125,
-        time_limit=300,
+        holdout_frac=0.125,
+        time_limit=3600,
     )
     predictor.predict(df_test)
     leaderboard = predictor.leaderboard(df_test)

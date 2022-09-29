@@ -148,6 +148,7 @@ NUMERICAL_TRANSFORMER = "numerical_transformer"
 CATEGORICAL_TRANSFORMER = "categorical_transformer"
 FUSION_MLP = "fusion_mlp"
 FUSION_TRANSFORMER = "fusion_transformer"
+HIERARCHICAL_TRANSFORMER = "hierarchical_transformer"
 MMDET_IMAGE = "mmdet_image"
 MMOCR_TEXT_DET = "mmocr_text_detection"
 HF_MODELS = (HF_TEXT, T_FEW, CLIP)

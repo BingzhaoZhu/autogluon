@@ -90,6 +90,7 @@ from .utils import (
     compute_score,
     create_fusion_data_processors,
     create_fusion_model,
+    create_hierarchical_model,
     data_to_df,
     extract_from_output,
     filter_search_space,
@@ -621,7 +622,7 @@ class MultiModalPredictor:
             # reload the predictor metadata
             predictor = MultiModalPredictor._load_metadata(predictor=self, path=best_trial_path)
             # construct the model
-            model = create_fusion_model(
+            model = create_hierarchical_model(
                 config=predictor._config,
                 num_classes=predictor._output_shape,
                 num_numerical_columns=len(predictor._df_preprocessor.numerical_feature_names),
@@ -871,7 +872,7 @@ class MultiModalPredictor:
         config = select_model(config=config, df_preprocessor=df_preprocessor)
 
         if self._model is None:
-            model = create_fusion_model(
+            model = create_hierarchical_model(
                 config=config,
                 num_classes=self._output_shape,
                 num_numerical_columns=len(df_preprocessor.numerical_feature_names),
@@ -2097,7 +2098,7 @@ class MultiModalPredictor:
         predictor = cls(label="dummy_label")
         predictor = cls._load_metadata(predictor=predictor, path=path, resume=resume, verbosity=verbosity)
 
-        model = create_fusion_model(
+        model = create_hierarchical_model(
             config=predictor._config,
             num_classes=predictor._output_shape,
             num_numerical_columns=len(predictor._df_preprocessor.numerical_feature_names),
