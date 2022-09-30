@@ -1843,11 +1843,10 @@ class MultiModalPredictor:
             ret_type = LOGITS
 
         # shuffle test data
-        if support_data is not None:
-            data.reset_index(drop=True, inplace=True)
-            perm = np.random.permutation(data.shape[0])
-            data = data.reindex(perm)
-            data.reset_index(drop=True, inplace=True)
+        data.reset_index(drop=True, inplace=True)
+        perm = np.random.permutation(data.shape[0])
+        data = data.reindex(perm)
+        data.reset_index(drop=True, inplace=True)
 
         if candidate_data:
             prob = self._match_queries_and_candidates(
@@ -1868,9 +1867,9 @@ class MultiModalPredictor:
             else:
                 prob = logits_or_prob
 
-        if support_data is not None:
-            inverse_perm = np.argsort(perm)
-            prob = prob[inverse_perm]
+        # unshuffle prediction
+        inverse_perm = np.argsort(perm)
+        prob = prob[inverse_perm]
 
         if not as_multiclass:
             if self._problem_type == BINARY:
