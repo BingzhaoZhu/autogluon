@@ -128,7 +128,7 @@ class AbstractTabularLearner(AbstractLearner):
              feature_prune=False, holdout_frac=0.1, hyperparameters=None, verbosity=2):
         raise NotImplementedError
 
-    def predict_proba(self, X: DataFrame, model=None, as_pandas=True, as_multiclass=True, inverse_transform=True, transform_features=True):
+    def predict_proba(self, X: DataFrame, model=None, as_pandas=True, as_multiclass=True, inverse_transform=True, transform_features=True, support_data=None):
         if as_pandas:
             X_index = copy.deepcopy(X.index)
         else:
@@ -138,7 +138,8 @@ class AbstractTabularLearner(AbstractLearner):
         else:
             if transform_features:
                 X = self.transform_features(X)
-            y_pred_proba = self.load_trainer().predict_proba(X, model=model)
+                support_data = self.transform_features(support_data) if support_data is not None else None
+            y_pred_proba = self.load_trainer().predict_proba(X, model=model, support_data=support_data)
         if inverse_transform:
             y_pred_proba = self.label_cleaner.inverse_transform_proba(y_pred_proba)
         if as_multiclass and (self.problem_type == BINARY):
@@ -152,12 +153,12 @@ class AbstractTabularLearner(AbstractLearner):
                 y_pred_proba = pd.Series(data=y_pred_proba, name=self.label, index=X_index)
         return y_pred_proba
 
-    def predict(self, X: DataFrame, model=None, as_pandas=True, transform_features=True):
+    def predict(self, X: DataFrame, model=None, as_pandas=True, transform_features=True, support_data=None):
         if as_pandas:
             X_index = copy.deepcopy(X.index)
         else:
             X_index = None
-        y_pred_proba = self.predict_proba(X=X, model=model, as_pandas=False, as_multiclass=False, inverse_transform=False, transform_features=transform_features)
+        y_pred_proba = self.predict_proba(X=X, model=model, as_pandas=False, as_multiclass=False, inverse_transform=False, transform_features=transform_features, support_data=support_data)
         problem_type = self.label_cleaner.problem_type_transform or self.problem_type
         y_pred = get_pred_from_proba(y_pred_proba=y_pred_proba, problem_type=problem_type)
         if problem_type != QUANTILE:

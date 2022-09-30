@@ -543,10 +543,10 @@ class AbstractTrainer:
             model = self._get_best()
         return self._predict_model(X, model)
 
-    def predict_proba(self, X, model=None):
+    def predict_proba(self, X, model=None, support_data=None):
         if model is None:
             model = self._get_best()
-        return self._predict_proba_model(X, model)
+        return self._predict_proba_model(X, model, support_data=support_data)
 
     def _get_best(self):
         if self.model_best is not None:
@@ -555,7 +555,7 @@ class AbstractTrainer:
             return self.get_model_best()
 
     # Note: model_pred_proba_dict is mutated in this function to minimize memory usage
-    def get_inputs_to_model(self, model, X, model_pred_proba_dict=None, fit=False, preprocess_nonadaptive=False):
+    def get_inputs_to_model(self, model, X, model_pred_proba_dict=None, fit=False, preprocess_nonadaptive=False, support_data=None):
         """
         For output X:
             If preprocess_nonadaptive=False, call model.predict(X)
@@ -571,7 +571,7 @@ class AbstractTrainer:
             else:
                 model_set = self.get_minimum_model_set(model)
                 model_set = [m for m in model_set if m != model.name]  # TODO: Can probably be faster, get this result from graph
-                model_pred_proba_dict = self.get_model_pred_proba_dict(X=X, models=model_set, model_pred_proba_dict=model_pred_proba_dict, fit=fit)
+                model_pred_proba_dict = self.get_model_pred_proba_dict(X=X, models=model_set, model_pred_proba_dict=model_pred_proba_dict, fit=fit, support_data=support_data)
             X = model.preprocess(X=X, preprocess_nonadaptive=preprocess_nonadaptive, fit=fit, model_pred_proba_dict=model_pred_proba_dict)
         elif preprocess_nonadaptive:
             X = model.preprocess(X=X, preprocess_stateful=False)
@@ -608,7 +608,8 @@ class AbstractTrainer:
                                   model_pred_time_dict=None,
                                   fit=False,
                                   record_pred_time=False,
-                                  use_val_cache: bool = False):
+                                  use_val_cache: bool = False,
+                                  support_data=None):
         if model_pred_proba_dict is None:
             model_pred_proba_dict = {}
         if model_pred_time_dict is None:
@@ -663,7 +664,7 @@ class AbstractTrainer:
                     preprocess_kwargs = dict(infer=False, model_pred_proba_dict=model_pred_proba_dict)
                     model_pred_proba_dict[model_name] = model.predict_proba(X, **preprocess_kwargs)
                 else:
-                    model_pred_proba_dict[model_name] = model.predict_proba(X)
+                    model_pred_proba_dict[model_name] = model.predict_proba(X, support_data=support_data)
 
             if record_pred_time:
                 time_end = time.time()
@@ -1690,10 +1691,10 @@ class AbstractTrainer:
             y_pred = get_pred_from_proba(y_pred_proba=y_pred, problem_type=problem_type)
         return y_pred
 
-    def _predict_proba_model(self, X, model, model_pred_proba_dict=None):
+    def _predict_proba_model(self, X, model, model_pred_proba_dict=None, support_data=None):
         if isinstance(model, str):
             model = self.load_model(model)
-        X = self.get_inputs_to_model(model=model, X=X, model_pred_proba_dict=model_pred_proba_dict, fit=False)
+        X = self.get_inputs_to_model(model=model, X=X, model_pred_proba_dict=model_pred_proba_dict, fit=False, support_data=support_data)
         return model.predict_proba(X=X)
 
     def _get_dummy_stacker(self, level: int, model_levels: dict, use_orig_features=True) -> StackerEnsembleModel:

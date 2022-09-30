@@ -1383,7 +1383,7 @@ class TabularPredictor:
                                             fit_ensemble=fit_ensemble, fit_ensemble_every_iter=fit_ensemble_every_iter,
                                             **fit_extra_kwargs)
 
-    def predict(self, data, model=None, as_pandas=True, transform_features=True):
+    def predict(self, data, model=None, as_pandas=True, transform_features=True, support_data=None):
         """
         Use trained models to produce predictions of `label` column values for new data.
 
@@ -1409,9 +1409,10 @@ class TabularPredictor:
         """
         self._assert_is_fit('predict')
         data = self.__get_dataset(data)
-        return self._learner.predict(X=data, model=model, as_pandas=as_pandas, transform_features=transform_features)
+        support_data = self.__get_dataset(support_data) if support_data is not None else None
+        return self._learner.predict(X=data, model=model, as_pandas=as_pandas, transform_features=transform_features, support_data=support_data)
 
-    def predict_proba(self, data, model=None, as_pandas=True, as_multiclass=True, transform_features=True):
+    def predict_proba(self, data, model=None, as_pandas=True, as_multiclass=True, transform_features=True, support_data=None):
         """
         Use trained models to produce predicted class probabilities rather than class-labels (if task is classification).
         If `predictor.problem_type` is regression, this functions identically to `predict`, returning the same output.
@@ -1448,7 +1449,8 @@ class TabularPredictor:
         """
         self._assert_is_fit('predict_proba')
         data = self.__get_dataset(data)
-        return self._learner.predict_proba(X=data, model=model, as_pandas=as_pandas, as_multiclass=as_multiclass, transform_features=transform_features)
+        support_data = self.__get_dataset(support_data) if support_data is not None else None
+        return self._learner.predict_proba(X=data, model=model, as_pandas=as_pandas, as_multiclass=as_multiclass, transform_features=transform_features, support_data=support_data)
 
     def evaluate(self, data, model=None, silent=False, auxiliary_metrics=True, detailed_report=False) -> dict:
         """

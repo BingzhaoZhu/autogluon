@@ -1403,6 +1403,7 @@ class MultiModalPredictor:
         self,
         data: Union[pd.DataFrame, dict, list],
         requires_label: bool,
+        support_data: Optional[pd.DataFrame] = None,
     ) -> List[Dict]:
 
         data, df_preprocessor, data_processors = self._on_predict_start(
@@ -1410,6 +1411,8 @@ class MultiModalPredictor:
             data=data,
             requires_label=requires_label,
         )
+
+        # Should we do support_data = to_df(support_data)?
 
         num_gpus = compute_num_gpus(config_num_gpus=self._config.env.num_gpus, strategy="dp")
 
@@ -1451,6 +1454,21 @@ class MultiModalPredictor:
                 data_processors=data_processors,
                 flag=True,
             )
+
+        # this is inefficient
+        # a better way is to have a new dataloader to combine dataset on-the-fly
+        # just for proof-of-concept
+        if support_data is not None:
+            data_with_support = []
+            for index in range(data.shape[0]):
+                row = data.iloc[index:index+1]
+                support = support_data.sample(n=batch_size-1)
+                row_with_support = pd.concat([row, support])
+                data_with_support.append(row_with_support)
+            data_with_support = pd.concat(data_with_support)
+            data_with_support.reset_index(drop=True, inplace=True)
+            data = data_with_support
+
         predict_dm = BaseDataModule(
             df_preprocessor=df_preprocessor,
             data_processors=data_processors,
@@ -1506,6 +1524,11 @@ class MultiModalPredictor:
                     task,
                     datamodule=predict_dm,
                 )
+
+        if support_data is not None:
+            for batch in outputs:
+                for key in batch:
+                    batch[key] = batch[key][0:1]
 
         return outputs
 
@@ -1785,6 +1808,7 @@ class MultiModalPredictor:
         candidate_data: Optional[Union[pd.DataFrame, dict, list]] = None,
         as_pandas: Optional[bool] = None,
         as_multiclass: Optional[bool] = True,
+        support_data: Optional[pd.DataFrame] = None,
     ):
         """
         Predict probabilities class probabilities rather than class labels.
@@ -1818,6 +1842,12 @@ class MultiModalPredictor:
         else:
             ret_type = LOGITS
 
+        # shuffle test data
+        if support_data is not None:
+            data.reset_index(drop=True, inplace=True)
+            perm = np.random.permutation(data.shape[0])
+            data = data.reindex(perm)
+
         if candidate_data:
             prob = self._match_queries_and_candidates(
                 query_data=data,
@@ -1828,6 +1858,7 @@ class MultiModalPredictor:
             outputs = self._predict(
                 data=data,
                 requires_label=False,
+                support_data=None,   ### !!! this is too slow, disabled for now
             )
             logits_or_prob = extract_from_output(outputs=outputs, ret_type=ret_type)
 
@@ -1835,6 +1866,10 @@ class MultiModalPredictor:
                 prob = logits_to_prob(logits_or_prob)
             else:
                 prob = logits_or_prob
+
+        if support_data is not None:
+            inverse_perm = np.argsort(perm)
+            prob = prob[inverse_perm]
 
         if not as_multiclass:
             if self._problem_type == BINARY:

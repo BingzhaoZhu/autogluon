@@ -155,13 +155,13 @@ class MultiModalPredictorModel(AbstractModel):
         self.model.set_verbosity(verbosity)
         root_logger.setLevel(root_log_level)  # Reset log level
 
-    def _predict_proba(self, X, **kwargs):
+    def _predict_proba(self, X, support_data=None, **kwargs):
         X = self.preprocess(X, **kwargs)
 
         if self.problem_type == REGRESSION:
             return self.model.predict(X, as_pandas=False)
 
-        y_pred_proba = self.model.predict_proba(X, as_pandas=False)
+        y_pred_proba = self.model.predict_proba(X, as_pandas=False, support_data=support_data)
         return self._convert_proba_to_unified_form(y_pred_proba)
 
     def save(self, path: str = None, verbose=True) -> str:

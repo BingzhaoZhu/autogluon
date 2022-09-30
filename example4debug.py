@@ -112,13 +112,13 @@ def train(args):
         train_data=df_train,
         hyperparameters=hyperparameters,
         holdout_frac=0.125,
-        time_limit=3600,
+        time_limit=36,
     )
 
-    probabilities = predictor.predict_proba(df_test, as_multiclass=True)
-    predictions = probabilities.idxmax(axis=1).to_numpy()
-    from sklearn.metrics import roc_auc_score, accuracy_score
-    print("guaguaguagua", accuracy_score(df_test[label].to_numpy(), predictions))
+    probabilities = predictor.predict(df_test, as_pandas=True, support_data=df_train.drop(label, axis=1))
+    # predictions = probabilities.idxmax(axis=1).to_numpy()
+    # from sklearn.metrics import roc_auc_score, accuracy_score
+    # print("guaguaguagua", accuracy_score(df_test[label].to_numpy(), predictions))
     leaderboard = predictor.leaderboard(df_test)
     leaderboard.to_csv("./leaderboard.csv")
     return

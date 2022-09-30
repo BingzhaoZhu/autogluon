@@ -675,7 +675,7 @@ class AbstractModel:
         y_pred = get_pred_from_proba(y_pred_proba=y_pred_proba, problem_type=self.problem_type)
         return y_pred
 
-    def predict_proba(self, X, normalize=None, **kwargs):
+    def predict_proba(self, X, normalize=None, support_data=None, **kwargs):
         """
         Returns class prediction probabilities of X.
         For binary problems, this returns the positive class label probability as a Series.
@@ -684,7 +684,7 @@ class AbstractModel:
         """
         if normalize is None:
             normalize = self.normalize_pred_probas
-        y_pred_proba = self._predict_proba(X=X, **kwargs)
+        y_pred_proba = self._predict_proba(X=X, support_data=support_data, **kwargs)
         if normalize:
             y_pred_proba = normalize_pred_probas(y_pred_proba, self.problem_type)
         y_pred_proba = y_pred_proba.astype(np.float32)
