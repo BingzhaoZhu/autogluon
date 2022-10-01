@@ -487,18 +487,18 @@ class FT_Transformer(nn.Module):
                 else:
                     assert kv_compression_sharing == "key-value", _INTERNAL_ERROR_MESSAGE
 
-            if row_attention:
+            if row_attention and layer_idx + 1 == n_blocks:
                 layer.update(
                     {
                         "row_attention": MultiheadAttention(
-                            d_token=d_token * n_tokens,
+                            d_token=d_token,
                             n_heads=attention_n_heads,
                             dropout=attention_dropout,
                             bias=True,
                             initialization=attention_initialization,
                         ),
                         "row_ffn": FT_Transformer.FFN(
-                            d_token=d_token * n_tokens,
+                            d_token=d_token,
                             d_hidden=ffn_d_hidden,
                             bias_first=True,
                             bias_second=True,
@@ -579,10 +579,10 @@ class FT_Transformer(nn.Module):
             x = self._end_residual(layer, "ffn", x, x_residual)
             x = layer["output"](x)
 
-            if self.row_attention:
+            if self.row_attention and layer_idx + 1 == len(self.blocks):
                 batch_size, n_tokens, d_token = x.shape
                 x = (
-                    x.reshape(batch_size, n_tokens * d_token)
+                    x[:, -1, :]
                     .unsqueeze(0)
                 )
 
@@ -601,7 +601,7 @@ class FT_Transformer(nn.Module):
 
                 x = (
                     x.squeeze(0)
-                    .reshape(batch_size, n_tokens, d_token)
+                    .reshape(batch_size, 1, d_token)
                 )
 
 
