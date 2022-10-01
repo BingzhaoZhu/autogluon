@@ -487,7 +487,7 @@ class FT_Transformer(nn.Module):
                 else:
                     assert kv_compression_sharing == "key-value", _INTERNAL_ERROR_MESSAGE
 
-            if row_attention and layer_idx == 0:
+            if row_attention and layer_idx + 1 == n_blocks:
                 layer.update(
                     {
                         "row_attention": MultiheadAttention(
@@ -563,7 +563,23 @@ class FT_Transformer(nn.Module):
         for layer_idx, layer in enumerate(self.blocks):
             layer = cast(nn.ModuleDict, layer)
 
-            if self.row_attention and layer_idx == 0:
+            query_idx = self.last_layer_query_idx if layer_idx + 1 == len(self.blocks) else None
+            x_residual = self._start_residual(layer, "attention", x)
+            x_residual, _ = layer["attention"](
+                x_residual if query_idx is None else x_residual[:, query_idx],
+                x_residual,
+                *self._get_kv_compressions(layer),
+            )
+            if query_idx is not None:
+                x = x[:, query_idx]
+            x = self._end_residual(layer, "attention", x, x_residual)
+
+            x_residual = self._start_residual(layer, "ffn", x)
+            x_residual = layer["ffn"](x_residual)
+            x = self._end_residual(layer, "ffn", x, x_residual)
+            x = layer["output"](x)
+
+            if self.row_attention and layer_idx + 1 == len(self.blocks):
                 batch_size, n_tokens, d_token = x.shape
                 # x = (
                 #     x[:, -1, :]
@@ -589,22 +605,6 @@ class FT_Transformer(nn.Module):
                 #     .reshape(batch_size, 1, d_token)
                 # )
                 x = torch.transpose(x, 0, 1)
-
-            query_idx = self.last_layer_query_idx if layer_idx + 1 == len(self.blocks) else None
-            x_residual = self._start_residual(layer, "attention", x)
-            x_residual, _ = layer["attention"](
-                x_residual if query_idx is None else x_residual[:, query_idx],
-                x_residual,
-                *self._get_kv_compressions(layer),
-            )
-            if query_idx is not None:
-                x = x[:, query_idx]
-            x = self._end_residual(layer, "attention", x, x_residual)
-
-            x_residual = self._start_residual(layer, "ffn", x)
-            x_residual = layer["ffn"](x_residual)
-            x = self._end_residual(layer, "ffn", x, x_residual)
-            x = layer["output"](x)
 
         x = self.head(x)
 
