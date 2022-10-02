@@ -1843,10 +1843,10 @@ class MultiModalPredictor:
             ret_type = LOGITS
 
         # shuffle test data
-        data = copy.deepcopy(data)
+        # data = copy.deepcopy(data)
         data.reset_index(drop=True, inplace=True)
         perm = np.random.permutation(data.shape[0])
-        data.reindex(perm)
+        data = data.reindex(perm)
         data.reset_index(drop=True, inplace=True)
 
         if candidate_data:
