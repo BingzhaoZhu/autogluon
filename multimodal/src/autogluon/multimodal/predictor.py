@@ -1845,7 +1845,7 @@ class MultiModalPredictor:
         # shuffle test data
         data.reset_index(drop=True, inplace=True)
         perm = np.random.permutation(data.shape[0])
-        data = data.reindex(perm)
+        data = copy.deepcopy(data).reindex(perm)
         data.reset_index(drop=True, inplace=True)
 
         if candidate_data:
