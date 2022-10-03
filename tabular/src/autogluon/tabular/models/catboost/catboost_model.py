@@ -254,7 +254,7 @@ class CatBoostModel(AbstractModel):
             params_head['iterations'] = max_iteration
             self.model = model_type(**params)
             dummy = model_type(**params_head)
-            for _ in range(20):
+            for _ in range(100):
                 X_aug = contrastive_transformer.random_perm()
                 self.model.fit(X_aug,
                                init_model=None if _ == 0 else self.model,
