@@ -487,7 +487,7 @@ class FT_Transformer(nn.Module):
                 else:
                     assert kv_compression_sharing == "key-value", _INTERNAL_ERROR_MESSAGE
 
-            if row_attention: #and layer_idx + 1 == n_blocks:
+            if row_attention and layer_idx + 1 == n_blocks:
                 layer.update(
                     {
                         "row_attention": MultiheadAttention(
@@ -579,13 +579,13 @@ class FT_Transformer(nn.Module):
             x = self._end_residual(layer, "ffn", x, x_residual)
             x = layer["output"](x)
 
-            if self.row_attention: # and layer_idx + 1 == len(self.blocks):
+            if self.row_attention and layer_idx + 1 == len(self.blocks):
                 batch_size, n_tokens, d_token = x.shape
-                # x = (
-                #     x[:, -1, :]
-                #     .unsqueeze(0)
-                # )
-                x = torch.transpose(x, 0, 1)
+                x = (
+                    x[:, -1, :]
+                    .unsqueeze(0)
+                )
+                # x = torch.transpose(x, 0, 1)
 
                 x_residual = self._start_residual(layer, "row_attention", x)
                 x_residual, _ = layer["row_attention"](
@@ -600,11 +600,11 @@ class FT_Transformer(nn.Module):
                 x = self._end_residual(layer, "row_ffn", x, x_residual)
                 x = layer["row_output"](x)
 
-                # x = (
-                #     x.squeeze(0)
-                #     .reshape(batch_size, 1, d_token)
-                # )
-                x = torch.transpose(x, 0, 1)
+                x = (
+                    x.squeeze(0)
+                    .reshape(batch_size, 1, d_token)
+                )
+                # x = torch.transpose(x, 0, 1)
 
         x = self.head(x)
 
