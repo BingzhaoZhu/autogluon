@@ -115,7 +115,7 @@ def train(args):
         time_limit=36,
     )
 
-    probabilities = predictor.predict(df_test, as_pandas=True, support_data=df_train.drop(label, axis=1))
+    probabilities = predictor.predict(df_test, as_pandas=True) #, support_data=df_train.drop(label, axis=1))
     # predictions = probabilities.idxmax(axis=1).to_numpy()
     # from sklearn.metrics import roc_auc_score, accuracy_score
     # print("guaguaguagua", accuracy_score(df_test[label].to_numpy(), predictions))
