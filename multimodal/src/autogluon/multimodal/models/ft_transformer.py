@@ -564,6 +564,13 @@ class FT_Transformer(nn.Module):
             layer = cast(nn.ModuleDict, layer)
 
             query_idx = self.last_layer_query_idx if layer_idx + 1 == len(self.blocks) else None
+
+            if self.row_attention:
+                x = torch.concat(
+                    [torch.mean(x, dim=1).unsqueeze(1), x],
+                    dim=1,
+                )
+
             x_residual = self._start_residual(layer, "attention", x)
             x_residual, _ = layer["attention"](
                 x_residual if query_idx is None else x_residual[:, query_idx],
