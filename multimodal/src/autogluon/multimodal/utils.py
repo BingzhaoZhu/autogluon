@@ -53,7 +53,7 @@ from .constants import (
     FUSION_TRANSFORMER,
     HF_MODELS,
     HF_TEXT,
-    HIERARCHICAL_TRANSFORMER,
+    FUSION_HIERARCHICAL_TRANSFORMER,
     IMAGE,
     LABEL,
     LAST_CHECKPOINT,
@@ -900,9 +900,26 @@ def create_model(
             row_attention=model_config.row_attention,
             n_tokens=num_numerical_columns+len(num_categories),
         )
-    elif model_name.lower().startswith(HIERARCHICAL_TRANSFORMER):
-        model = HierarchicalTabularTransformer(
+    elif model_name.lower().startswith(FUSION_HIERARCHICAL_TRANSFORMER):
+        model = functools.partial(
+            HierarchicalTabularTransformer,
             prefix=model_name,
+            hidden_features=model_config.hidden_size,
+            num_classes=num_classes,
+            n_blocks=model_config.n_blocks,
+            attention_n_heads=model_config.attention_n_heads,
+            ffn_d_hidden=model_config.ffn_d_hidden,
+            attention_dropout=model_config.attention_dropout,
+            residual_dropout=model_config.residual_dropout,
+            ffn_dropout=model_config.ffn_dropout,
+            attention_normalization=model_config.normalization,
+            ffn_normalization=model_config.normalization,
+            head_normalization=model_config.normalization,
+            ffn_activation=model_config.ffn_activation,
+            head_activation=model_config.head_activation,
+            adapt_in_features=model_config.adapt_in_features,
+            loss_weight=model_config.weight if hasattr(model_config, "weight") else None,
+            row_attention=model_config.row_attention,
             num_categories=num_categories,
             num_numerical_columns=num_numerical_columns,
             tokens_per_level=model_config.tokens_per_level,
@@ -910,41 +927,6 @@ def create_model(
         )
     else:
         raise ValueError(f"unknown model name: {model_name}")
-
-    return model
-
-
-def create_hierarchical_model(
-    config: DictConfig,
-    num_classes: Optional[int] = None,
-    num_numerical_columns: Optional[int] = None,
-    num_categories: Optional[List[int]] = None,
-    pretrained: Optional[bool] = True,):
-
-    if HIERARCHICAL_TRANSFORMER not in config.model.names:
-        return create_fusion_model(config,
-                                   num_classes,
-                                   num_numerical_columns,
-                                   num_categories,
-                                   pretrained
-                                   )
-
-    config.model.names.remove(HIERARCHICAL_TRANSFORMER)
-    model = create_model(
-            model_name=HIERARCHICAL_TRANSFORMER,
-            model_config=getattr(config.model, HIERARCHICAL_TRANSFORMER),
-            num_classes=num_classes,
-            num_numerical_columns=num_numerical_columns,
-            num_categories=num_categories,
-            pretrained=pretrained,
-        )
-
-    model.set_node_model(create_fusion_model,
-                         config,
-                         num_classes,
-                         num_numerical_columns,
-                         num_categories,
-                         pretrained)
 
     return model
 

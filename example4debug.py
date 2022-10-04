@@ -94,8 +94,9 @@ def train(args):
     hyperparameters['FT_TRANSFORMER'] = {"env.num_gpus": 1,
                                          "env.per_gpu_batch_size": 128,
                                          "env.eval_batch_size_ratio": 1,
-                                         "model.fusion_transformer.row_attention": True,
-                                         "optimization.patience": 3,
+                                         # "model.fusion_transformer.row_attention": False,
+                                         "model.names": ["categorical_transformer", "numerical_transformer", "fusion_hierarchical_transformer"],
+                                         # "optimization.patience": 3,
                                          # "pretrainer": True,
                                          # "pretrainer.augmentation_type": "identical",
                                          # "pretrainer.corruption_rate": 0.6,
@@ -112,7 +113,7 @@ def train(args):
         train_data=df_train,
         hyperparameters=hyperparameters,
         holdout_frac=0.125,
-        time_limit=36,
+        time_limit=600,
     )
 
     probabilities = predictor.predict(df_test, as_pandas=True) #, support_data=df_train.drop(label, axis=1))

@@ -252,7 +252,7 @@ class MultimodalFusionTransformer(nn.Module):
             assert loss_weight > 0
 
         if row_attention:
-            n_tokens = n_tokens + 1 if True else n_tokens  # cls_token is also True
+            n_tokens = n_tokens + 1 if True else n_tokens  # cls_token is always True
         else:
             n_tokens = None
 
