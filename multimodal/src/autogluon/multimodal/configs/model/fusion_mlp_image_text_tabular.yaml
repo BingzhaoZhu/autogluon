@@ -182,7 +182,7 @@ model:
     row_attention: False
   fusion_hierarchical_transformer:
     hidden_size: 192
-    n_blocks: 2
+    n_blocks: 3
     attention_n_heads: 8
     adapt_in_features: "max"
     attention_dropout: 0.2
