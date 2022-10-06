@@ -100,6 +100,7 @@ def train(args):
                                          "pretrainer": True,
                                          "pretrainer.augmentation_type": "random_perm",
                                          "pretrainer.corruption_rate": 0.6,
+                                         "pretrainer.max_epochs": 0,
                                          }
     # hyperparameters['CAT'] = {"pretrainer": True,
     #                           "random_seed": 10,
