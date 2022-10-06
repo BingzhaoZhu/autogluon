@@ -69,6 +69,7 @@ class ContrastiveTransformations:
         self.mode = mode if mode is not None else "identical"
         self.problem_type = problem_type
         self.corruption_rate = corruption_rate
+        self.last_batch = None
 
     def __call__(self, batch):
         if self.mode == "identical":
@@ -112,15 +113,23 @@ class ContrastiveTransformations:
 
     def random_perm(self, batch):
         corruption_rate = self.corruption_rate
-        batch = copy.deepcopy(batch)
         batch_size, = batch[self.model.label_key].size()
         corruption_len = int(batch_size * corruption_rate)
+
+        if self.last_batch is None or \
+                              self.last_batch[self.model.label_key].size(0) != batch_size:
+            batch_perm = batch
+        else:
+            batch_perm = self.last_batch
+
+        self.last_batch = batch
+
+        batch = copy.deepcopy(batch)
         for permodel in self.model.model:
             if hasattr(permodel, "categorical_key"):
                 categorical_features = []
-                for categorical_feature in batch[permodel.categorical_key]:
-                    random_idx = torch.randint(high=batch_size, size=(batch_size,))
-                    random_sample = categorical_feature[random_idx]
+                for categorical_feature, random_sample in zip(batch[permodel.categorical_key],
+                                                              batch_perm[permodel.categorical_key]):
                     corruption_idx = torch.randperm(batch_size)[:corruption_len]
                     corruption_mask = torch.zeros_like(categorical_feature, dtype=torch.bool)
                     corruption_mask[corruption_idx] = True
@@ -129,9 +138,8 @@ class ContrastiveTransformations:
                 batch[permodel.categorical_key] = tuple(categorical_features)
             if hasattr(permodel, "numerical_key"):
                 numerical_features = batch[permodel.numerical_key]
+                random_sample = batch_perm[permodel.numerical_key]
                 _, m = numerical_features.size()
-                indices = torch.argsort(torch.rand(*numerical_features.shape), dim=0)
-                random_sample = numerical_features[indices, torch.arange(m).unsqueeze(0)]
                 corruption_mask = torch.zeros_like(numerical_features, dtype=torch.bool)
                 for i in range(m):
                     corruption_idx = torch.randperm(batch_size)[:corruption_len]
