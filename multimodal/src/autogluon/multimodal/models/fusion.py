@@ -339,6 +339,7 @@ class MultimodalFusionTransformer(nn.Module):
     def forward(
         self,
         batch: dict,
+        is_pretrain: Optional[bool] = False,
     ):
         multimodal_features = []
         output = {}
@@ -357,7 +358,7 @@ class MultimodalFusionTransformer(nn.Module):
         multimodal_features = self.cls_token(multimodal_features)
         features = self.fusion_transformer(multimodal_features)
 
-        logits = self.pretrain_head(features) if self.pretrain else self.head(features)
+        logits = self.pretrain_head(features) if (self.pretrain or is_pretrain) else self.head(features)
         fusion_output = {
             self.prefix: {
                 LOGITS: logits,

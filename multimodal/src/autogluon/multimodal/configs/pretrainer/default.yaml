@@ -11,3 +11,5 @@ pretrainer:
   end_lr: 0
   augmentation_type: "random_perm"
   corruption_rate: 0.3
+  loss_coefficient: 0.1
+  loss_mixup: "pretrain"

@@ -74,6 +74,7 @@ from .data.infer_types import (
 )
 from .optimization.lit_distiller import DistillerLitModule
 from .optimization.lit_matcher import MatcherLitModule
+from .optimization.lit_softpretrainer import SoftLitModule
 from .optimization.lit_module import LitModule
 from .optimization.lit_pretrainer import PretrainerLitModule
 from .optimization.losses import RKDLoss
@@ -1047,8 +1048,7 @@ class MultiModalPredictor:
                 **metrics_kwargs,
                 **optimization_kwargs,
             )
-        else:
-            if is_pretrain:
+        elif is_pretrain:
                 pretrain_kwargs = dict(
                     problem_type=self.problem_type,
                     augmentation_mode=config.pretrainer.augmentation_type,
@@ -1066,7 +1066,22 @@ class MultiModalPredictor:
                     model=model,
                     **pretrain_kwargs,
                 )
-
+                task = SoftLitModule(
+                    model=model,
+                    loss_func=loss_func,
+                    efficient_finetune=OmegaConf.select(config, "optimization.efficient_finetune"),
+                    mixup_fn=mixup_fn,
+                    mixup_off_epoch=OmegaConf.select(config, "data.mixup.turn_off_epoch"),
+                    trainable_param_names=OmegaConf.select(config, "optimization.trainable_param_names", default=None),
+                    problem_type=self.problem_type,
+                    augmentation_mode=config.pretrainer.augmentation_type,
+                    corruption_rate=config.pretrainer.corruption_rate,
+                    loss_coefficient=config.pretrainer.loss_coefficient,
+                    loss_mixup=config.pretrainer.loss_mixup,
+                    **metrics_kwargs,
+                    **optimization_kwargs,
+                )
+        else:
             task = LitModule(
                 model=model,
                 loss_func=loss_func,
