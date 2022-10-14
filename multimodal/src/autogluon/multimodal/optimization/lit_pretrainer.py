@@ -111,22 +111,38 @@ class ContrastiveTransformations:
                 batch[permodel.numerical_key] = numerical_features
         return batch
 
-
     def random_perm(self, batch):
         corruption_rate = self.corruption_rate
         batch_size, = batch[self.model.label_key].size()
-        corruption_len = int(batch_size * corruption_rate)
         batch = copy.deepcopy(batch)
+
+        num_features = 0
+        for permodel in self.model.model:
+            if hasattr(permodel, "categorical_key"):
+                num_features += len(batch[permodel.categorical_key])
+            if hasattr(permodel, "numerical_key"):
+                _, m = batch[permodel.numerical_key].size()
+                num_features += m
+
+        corruption_mask = torch.zeros(batch_size,
+                                      num_features,
+                                      dtype=torch.bool,
+                                      device=batch[self.model.label_key].device
+                                      )
+        corruption_len = int(num_features * corruption_rate)
+        for i in range(batch_size):
+            corruption_idx = torch.randperm(num_features)[:corruption_len]
+            corruption_mask[i, corruption_idx] = True
+        feature_idx = 0
+
         for permodel in self.model.model:
             if hasattr(permodel, "categorical_key"):
                 categorical_features = []
                 for categorical_feature in batch[permodel.categorical_key]:
                     random_idx = torch.randint(high=batch_size, size=(batch_size,))
                     random_sample = categorical_feature[random_idx]
-                    corruption_idx = torch.randperm(batch_size)[:corruption_len]
-                    corruption_mask = torch.zeros_like(categorical_feature, dtype=torch.bool)
-                    corruption_mask[corruption_idx] = True
-                    positive = torch.where(corruption_mask, random_sample, categorical_feature)
+                    positive = torch.where(corruption_mask[:, feature_idx], random_sample, categorical_feature)
+                    feature_idx += 1
                     categorical_features.append(positive)
                 batch[permodel.categorical_key] = tuple(categorical_features)
             if hasattr(permodel, "numerical_key"):
@@ -134,32 +150,22 @@ class ContrastiveTransformations:
                 _, m = numerical_features.size()
                 indices = torch.argsort(torch.rand(*numerical_features.shape), dim=0)
                 random_sample = numerical_features[indices, torch.arange(m).unsqueeze(0)]
-                corruption_mask = torch.zeros_like(numerical_features, dtype=torch.bool)
-                for i in range(m):
-                    corruption_idx = torch.randperm(batch_size)[:corruption_len]
-                    corruption_mask[corruption_idx, i] = True
-                batch[permodel.numerical_key] = torch.where(corruption_mask, random_sample, numerical_features)
+                batch[permodel.numerical_key] = torch.where(corruption_mask[:, feature_idx:feature_idx+m],
+                                                            random_sample, numerical_features)
+                feature_idx += m
         return batch
 
     # def random_perm(self, batch):
     #     corruption_rate = self.corruption_rate
     #     batch_size, = batch[self.model.label_key].size()
     #     corruption_len = int(batch_size * corruption_rate)
-    #
-    #     if self.last_batch is None or \
-    #                           self.last_batch[self.model.label_key].size(0) != batch_size:
-    #         batch_perm = batch
-    #     else:
-    #         batch_perm = self.last_batch
-    #
-    #     self.last_batch = batch
-    #
     #     batch = copy.deepcopy(batch)
     #     for permodel in self.model.model:
     #         if hasattr(permodel, "categorical_key"):
     #             categorical_features = []
-    #             for categorical_feature, random_sample in zip(batch[permodel.categorical_key],
-    #                                                           batch_perm[permodel.categorical_key]):
+    #             for categorical_feature in batch[permodel.categorical_key]:
+    #                 random_idx = torch.randint(high=batch_size, size=(batch_size,))
+    #                 random_sample = categorical_feature[random_idx]
     #                 corruption_idx = torch.randperm(batch_size)[:corruption_len]
     #                 corruption_mask = torch.zeros_like(categorical_feature, dtype=torch.bool)
     #                 corruption_mask[corruption_idx] = True
@@ -168,16 +174,15 @@ class ContrastiveTransformations:
     #             batch[permodel.categorical_key] = tuple(categorical_features)
     #         if hasattr(permodel, "numerical_key"):
     #             numerical_features = batch[permodel.numerical_key]
-    #             random_sample = batch_perm[permodel.numerical_key]
     #             _, m = numerical_features.size()
+    #             indices = torch.argsort(torch.rand(*numerical_features.shape), dim=0)
+    #             random_sample = numerical_features[indices, torch.arange(m).unsqueeze(0)]
     #             corruption_mask = torch.zeros_like(numerical_features, dtype=torch.bool)
     #             for i in range(m):
     #                 corruption_idx = torch.randperm(batch_size)[:corruption_len]
     #                 corruption_mask[corruption_idx, i] = True
     #             batch[permodel.numerical_key] = torch.where(corruption_mask, random_sample, numerical_features)
-    #
     #     return batch
-
 
 class PretrainerLitModule(pl.LightningModule):
     """
