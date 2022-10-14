@@ -177,6 +177,8 @@ class SoftLitModule(pl.LightningModule):
         positive: Dict,
     ):
         loss = 0
+        if output is None or positive is None:
+            return loss
         for per_key, _ in output.items():
             per_output = output[per_key]
             per_positive = positive[per_key]
@@ -194,13 +196,7 @@ class SoftLitModule(pl.LightningModule):
         self,
         output: Dict,
         label: torch.Tensor,
-        contrastive: Optional[Tuple] = None,
     ):
-        original_view, corrupted_view = contrastive
-        if original_view is None or corrupted_view is None:  # apply pretrain loss
-            pretrain_loss = 0
-        else:
-            pretrain_loss = self._compute_pretrain_loss(original_view, corrupted_view)
 
         loss = 0
         for _, per_output in output.items():
@@ -217,7 +213,7 @@ class SoftLitModule(pl.LightningModule):
                     )
                     * weight
                 )
-        return loss + pretrain_loss * self.loss_coefficient
+        return loss
 
     def _compute_metric_score(
         self,
@@ -252,8 +248,9 @@ class SoftLitModule(pl.LightningModule):
             corrupted_view = self.model(corrupted_batch, is_pretrain=True)
         else:
             original_view, corrupted_view = None, None
-        loss = self._compute_loss(output=output, label=label, contrastive=(original_view, corrupted_view))
-        return output, loss
+        contrastive = (original_view, corrupted_view)
+        loss = self._compute_loss(output=output, label=label)
+        return output, loss, contrastive
 
     def training_step(self, batch, batch_idx):
         """
@@ -274,9 +271,10 @@ class SoftLitModule(pl.LightningModule):
         -------
         Average loss of the mini-batch data.
         """
-        output, loss = self._shared_step(batch)
+        output, loss, contrastive = self._shared_step(batch)
+        contrastive_loss = self._compute_pretrain_loss(*contrastive)
         self.log("train_loss", loss)
-        return loss
+        return loss + contrastive_loss * self.loss_coefficient
 
     def validation_step(self, batch, batch_idx):
         """
@@ -294,7 +292,7 @@ class SoftLitModule(pl.LightningModule):
         batch_idx
             Index of mini-batch.
         """
-        output, loss = self._shared_step(batch)
+        output, loss, _ = self._shared_step(batch)
         if isinstance(self.loss_func, nn.BCEWithLogitsLoss):
             output[self.model.prefix][LOGITS] = torch.sigmoid(output[self.model.prefix][LOGITS].float())
         # By default, on_step=False and on_epoch=True
