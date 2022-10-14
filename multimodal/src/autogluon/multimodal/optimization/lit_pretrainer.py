@@ -112,8 +112,16 @@ class ContrastiveTransformations:
         return batch
 
     def random_perm(self, batch):
+
+        if self.last_batch is None:
+            last_batch = batch
+        else:
+            last_batch = self.last_batch
+        self.last_batch = batch
+
         corruption_rate = self.corruption_rate
         batch_size, = batch[self.model.label_key].size()
+        last_batch_size, = last_batch[self.model.label_key].size()
         batch = copy.deepcopy(batch)
 
         num_features = 0
@@ -138,18 +146,22 @@ class ContrastiveTransformations:
         for permodel in self.model.model:
             if hasattr(permodel, "categorical_key"):
                 categorical_features = []
-                for categorical_feature in batch[permodel.categorical_key]:
-                    random_idx = torch.randint(high=batch_size, size=(batch_size,))
-                    random_sample = categorical_feature[random_idx]
+                for categorical_idx in range(len(batch[permodel.categorical_key])):
+                    categorical_feature = batch[permodel.categorical_key][categorical_idx]
+                    last_categorical_feature = last_batch[permodel.categorical_key][categorical_idx]
+                    random_idx = torch.randint(high=last_batch_size, size=(batch_size,))
+                    random_sample = last_categorical_feature[random_idx]
                     positive = torch.where(corruption_mask[:, feature_idx], random_sample, categorical_feature)
                     feature_idx += 1
                     categorical_features.append(positive)
                 batch[permodel.categorical_key] = tuple(categorical_features)
             if hasattr(permodel, "numerical_key"):
                 numerical_features = batch[permodel.numerical_key]
+                last_numerical_features = last_batch[permodel.numerical_key]
                 _, m = numerical_features.size()
                 indices = torch.argsort(torch.rand(*numerical_features.shape), dim=0)
-                random_sample = numerical_features[indices, torch.arange(m).unsqueeze(0)]
+                indices = indices % last_batch_size
+                random_sample = last_numerical_features[indices, torch.arange(m).unsqueeze(0)]
                 batch[permodel.numerical_key] = torch.where(corruption_mask[:, feature_idx:feature_idx+m],
                                                             random_sample, numerical_features)
                 feature_idx += m
