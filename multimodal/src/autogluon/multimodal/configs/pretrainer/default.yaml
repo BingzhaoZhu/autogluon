@@ -1,15 +1,7 @@
 pretrainer:
-  optim_type: "adamw"
-  learning_rate: 1.0e-4
-  weight_decay: 0.001
-  lr_choice: "layerwise_decay"
-  lr_decay: 0.9
-  lr_schedule: "cosine_decay"
-  max_epochs: 10
-  max_steps: -1
-  warmup_steps: 0.1
-  end_lr: 0
+  pretrain_epochs: 5
   augmentation_type: "random_perm"
   corruption_rate: 0.3
-  loss_coefficient: 0.1
+  start_loss_coefficient: 1
+  end_loss_coefficient: 0.01
   loss_mixup: "pretrain"

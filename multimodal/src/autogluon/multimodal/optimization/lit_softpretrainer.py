@@ -46,10 +46,12 @@ class SoftLitModule(pl.LightningModule):
         mixup_fn: Optional[MixupModule] = None,
         mixup_off_epoch: Optional[int] = 0,
 
+        pretrain_epochs: Optional[int] = 5,
         problem_type: Optional[str] = None,
         augmentation_mode: Optional[str] = None,
         corruption_rate: Optional[float] = None,
-        loss_coefficient: Optional[float] = 0.1,
+        start_loss_coefficient: Optional[float] = 0.1,
+        end_loss_coefficient: Optional[float] = 0.1,
         loss_mixup: Optional[str] = None,
     ):
         """
@@ -135,7 +137,9 @@ class SoftLitModule(pl.LightningModule):
                                                          problem_type=problem_type,
                                                          corruption_rate=corruption_rate,
                                                          )
-        self.loss_coefficient = loss_coefficient
+        self.start_loss_coefficient = start_loss_coefficient
+        self.end_loss_coefficient = end_loss_coefficient
+        self.pretrain_epochs = pretrain_epochs
         self.loss_mixup = loss_mixup
 
     def _compute_template_loss(
@@ -274,7 +278,13 @@ class SoftLitModule(pl.LightningModule):
         output, loss, contrastive = self._shared_step(batch)
         contrastive_loss = self._compute_pretrain_loss(*contrastive)
         self.log("train_loss", loss)
-        return loss + contrastive_loss * self.loss_coefficient
+
+        if self.current_epoch < self.pretrain_epochs:
+            return contrastive_loss
+        else:
+            loss_coefficient = self.start_loss_coefficient / self.current_epoch * self.pretrain_epochs
+            loss_coefficient = max(loss_coefficient, self.end_loss_coefficient)
+            return loss + contrastive_loss * loss_coefficient
 
     def validation_step(self, batch, batch_idx):
         """
