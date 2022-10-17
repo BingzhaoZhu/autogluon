@@ -377,6 +377,32 @@ class FT_Transformer(nn.Module):
             x = self.linear2(x)
             return x
 
+    class ProjectionHead(nn.Module):
+        """The final module of the `Transformer` that performs BERT-like inference."""
+
+        def __init__(
+            self,
+            *,
+            d_in: int,
+            bias: bool,
+            activation: ModuleType,
+            normalization: ModuleType,
+            d_out: int,
+        ):
+            super().__init__()
+            self.normalization = _make_nn_module(normalization, d_in)
+            self.activation = _make_nn_module(activation)
+            self.linear1 = nn.Linear(d_in, d_in, bias)
+            self.linear2 = nn.Linear(d_in, d_out, bias)
+
+        def forward(self, x: Tensor) -> Tensor:
+            x = x[:, :-1]
+            x = self.linear1(x)
+            x = self.normalization(x)
+            x = self.activation(x)
+            x = self.linear2(x)
+            return x
+
     def __init__(
         self,
         *,

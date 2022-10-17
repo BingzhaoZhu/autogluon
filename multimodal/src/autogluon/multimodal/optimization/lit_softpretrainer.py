@@ -12,7 +12,7 @@ from torchmetrics.aggregation import BaseAggregator
 from ..constants import AUTOMM, LM_TARGET, LOGITS, T_FEW, TEMPLATE_LOGITS, WEIGHT
 from ..data.mixup import MixupModule, multimodel_mixup
 from .utils import apply_layerwise_lr_decay, apply_single_lr, apply_two_stages_lr, get_lr_scheduler, get_optimizer
-from .lit_pretrainer import NTXent, ContrastiveTransformations
+from .lit_pretrainer import NTXent, ContrastiveTransformations, InfoNCELoss
 
 logger = logging.getLogger(AUTOMM)
 
@@ -131,7 +131,7 @@ class SoftLitModule(pl.LightningModule):
             )
         self.custom_metric_func = custom_metric_func
 
-        self.pretrain_loss_func = NTXent(temperature=1)
+        self.pretrain_loss_func = InfoNCELoss()
         self.contrastive_fn = ContrastiveTransformations(model,
                                                          mode=augmentation_mode,
                                                          problem_type=problem_type,

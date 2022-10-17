@@ -308,14 +308,14 @@ class MultimodalFusionTransformer(nn.Module):
                     activation=head_activation,
                     normalization=head_normalization,
                 ),
-                "projection_1": FT_Transformer.Head(
+                "projection_1": FT_Transformer.ProjectionHead(
                     d_in=in_features,
                     d_out=in_features,
                     bias=True,
                     activation=head_activation,
                     normalization="identity",
                 ),
-                "projection_2": FT_Transformer.Head(
+                "projection_2": FT_Transformer.ProjectionHead(
                     d_in=in_features,
                     d_out=in_features,
                     bias=True,

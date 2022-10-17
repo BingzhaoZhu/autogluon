@@ -76,7 +76,6 @@ from .optimization.lit_distiller import DistillerLitModule
 from .optimization.lit_matcher import MatcherLitModule
 from .optimization.lit_softpretrainer import SoftLitModule
 from .optimization.lit_module import LitModule
-from .optimization.lit_pretrainer import PretrainerLitModule
 from .optimization.losses import RKDLoss
 from .optimization.utils import get_loss_func, get_metric
 from .utils import (
