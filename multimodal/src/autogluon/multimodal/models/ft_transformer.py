@@ -29,6 +29,8 @@ def _make_nn_module(module_type: ModuleType, *args) -> nn.Module:
             return nn.LeakyReLU()
         elif module_type == "layer_norm":
             return nn.LayerNorm(*args)
+        elif module_type == "identity":
+            return nn.Identity()
         else:
             try:
                 cls = getattr(nn, module_type)

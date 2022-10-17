@@ -245,11 +245,11 @@ class SoftLitModule(pl.LightningModule):
         corrupted_batch = self.contrastive_fn(batch)
         output = self.model(batch)
         if self.loss_mixup == "self_distill":
-            original_view = self.model(batch, is_pretrain=False)
-            corrupted_view = self.model(corrupted_batch, is_pretrain=False)
+            original_view = self.model(batch)
+            corrupted_view = self.model(corrupted_batch)
         elif self.loss_mixup == "pretrain":
-            original_view = self.model(batch, is_pretrain=True)
-            corrupted_view = self.model(corrupted_batch, is_pretrain=True)
+            original_view = self.model(batch, head="projection_1")
+            corrupted_view = self.model(corrupted_batch, head="projection_2")
         else:
             original_view, corrupted_view = None, None
         contrastive = (original_view, corrupted_view)
