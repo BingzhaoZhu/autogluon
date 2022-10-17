@@ -282,7 +282,8 @@ class SoftLitModule(pl.LightningModule):
         if self.current_epoch < self.pretrain_epochs:
             return contrastive_loss
         else:
-            loss_coefficient = self.start_loss_coefficient / self.current_epoch * self.pretrain_epochs
+            loss_coefficient = self.start_loss_coefficient / (self.current_epoch + 1) \
+                               * (self.pretrain_epochs + 1)
             loss_coefficient = max(loss_coefficient, self.end_loss_coefficient)
             return loss + contrastive_loss * loss_coefficient
 
