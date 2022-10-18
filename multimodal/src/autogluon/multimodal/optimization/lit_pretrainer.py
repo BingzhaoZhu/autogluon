@@ -290,18 +290,19 @@ class ContrastiveTransformations:
     #     return batch
 
 
-import torch.nn.functional as F
+class ReconstructionLoss:
+    def __init__(self, model):
+        self.model = model
 
-class ReconstructionLoss(nn.Module):
-
-    def __init__(self,):
-        super().__init__()
-
-    def loss_fn(self, pred_num, pred_cat, target_num, target_cat, mask_num, mask_cat):
-
-        loss = F.mse_loss(pred_num, target_num)
-
-        if pred_cat:
-            for i, p in enumerate(pred_cat):
-                loss += F.cross_entropy(p, target_cat[:, i].long())
+    def __call__(self, batch, batch_):
+        batch_ = batch_[self.model.prefix]['logits']
+        loss = 0
+        for permodel in self.model.model:
+            if hasattr(permodel, "categorical_key"):
+                for y_, y in zip(batch_["cat_out"], batch[permodel.categorical_key]):
+                    loss += F.cross_entropy(y_, y.long())
+            if hasattr(permodel, "numerical_key"):
+                y = batch[permodel.numerical_key]
+                y_ = batch_["num_out"]
+                loss = F.mse_loss(y_, y)
         return loss

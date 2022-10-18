@@ -244,13 +244,14 @@ class MultimodalFusionTransformer(nn.Module):
         adapt_in_features: Optional[str] = None,
         loss_weight: Optional[float] = None,
         row_attention: Optional[bool] = False,
-        n_tokens: Optional[int] = None,
+        num_numerical_columns: Optional[int] = None,
+        num_categories: Optional[List[int]]= None,
     ):
         super().__init__()
         logger.debug("initializing MultimodalFusionTransformer")
         if loss_weight is not None:
             assert loss_weight > 0
-
+        n_tokens = num_numerical_columns + len(num_categories)
         if row_attention:
             n_tokens = n_tokens + 1 if True else n_tokens  # cls_token is always True
         else:
@@ -322,7 +323,14 @@ class MultimodalFusionTransformer(nn.Module):
                     activation=head_activation,
                     normalization="identity",
                 ),
-                "reconstruction": None,
+                "reconstruction": FT_Transformer.ReconstructionHead(
+                    d_in=in_features,
+                    bias=True,
+                    activation=head_activation,
+                    normalization="identity",
+                    n_num_features=num_numerical_columns,
+                    category_sizes=num_categories,
+                ),
             }
         )
 

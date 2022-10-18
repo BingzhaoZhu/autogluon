@@ -12,7 +12,7 @@ from torchmetrics.aggregation import BaseAggregator
 from ..constants import AUTOMM, LM_TARGET, LOGITS, T_FEW, TEMPLATE_LOGITS, WEIGHT
 from ..data.mixup import MixupModule, multimodel_mixup
 from .utils import apply_layerwise_lr_decay, apply_single_lr, apply_two_stages_lr, get_lr_scheduler, get_optimizer
-from .lit_pretrainer import NTXent, ContrastiveTransformations, InfoNCELoss
+from .lit_pretrainer import NTXent, ContrastiveTransformations, InfoNCELoss, ReconstructionLoss
 
 logger = logging.getLogger(AUTOMM)
 
@@ -131,7 +131,8 @@ class SoftLitModule(pl.LightningModule):
             )
         self.custom_metric_func = custom_metric_func
 
-        self.pretrain_loss_func = InfoNCELoss()
+        self.contrastive_loss = InfoNCELoss()
+        self.reconstruction_loss = ReconstructionLoss(model)
         self.contrastive_fn = ContrastiveTransformations(model,
                                                          mode=augmentation_mode,
                                                          problem_type=problem_type,
@@ -177,24 +178,30 @@ class SoftLitModule(pl.LightningModule):
 
     def _compute_pretrain_loss(
         self,
+        batch: Dict,
         output: Dict,
         positive: Dict,
+        reconstruction: Dict,
     ):
         loss = 0
-        if output is None or positive is None:
-            return loss
-        for per_key, _ in output.items():
-            per_output = output[per_key]
-            per_positive = positive[per_key]
-            weight = per_output[WEIGHT] if WEIGHT in per_output else 1
-            loss += (
-                    self.pretrain_loss_func(
-                        z_i=per_output[LOGITS],
-                        z_j=per_positive[LOGITS],
-                    )
-                    * weight
-            )
+        if output and positive:
+            for per_key, _ in output.items():
+                per_output = output[per_key]
+                per_positive = positive[per_key]
+                weight = per_output[WEIGHT] if WEIGHT in per_output else 1
+                loss += (
+                        self.contrastive_loss(
+                            z_i=per_output[LOGITS],
+                            z_j=per_positive[LOGITS],
+                        )
+                        * weight
+                )
+
+        if reconstruction:
+            loss += self.reconstruction_loss(batch, reconstruction)
+
         return loss
+
 
     def _compute_loss(
         self,
@@ -244,15 +251,14 @@ class SoftLitModule(pl.LightningModule):
             batch, label = multimodel_mixup(batch=batch, model=self.model, mixup_fn=self.mixup_fn)
         corrupted_batch = self.contrastive_fn(batch)
         output = self.model(batch)
-        if self.loss_mixup == "self_distill":
-            original_view = self.model(batch)
-            corrupted_view = self.model(corrupted_batch)
-        elif self.loss_mixup == "pretrain":
+        original_view, corrupted_view, reconstruction = None, None, None
+        if self.loss_mixup == "reconstruction":
+            reconstruction = self.model(corrupted_batch, head="reconstruction")
+        elif self.loss_mixup == "contrastive":
             original_view = self.model(batch, head="contrastive_1")
             corrupted_view = self.model(corrupted_batch, head="contrastive_2")
-        else:
-            original_view, corrupted_view = None, None
-        contrastive = (original_view, corrupted_view)
+
+        contrastive = (batch, original_view, corrupted_view, reconstruction)
         loss = self._compute_loss(output=output, label=label)
         return output, loss, contrastive
 
@@ -276,16 +282,16 @@ class SoftLitModule(pl.LightningModule):
         Average loss of the mini-batch data.
         """
         output, loss, contrastive = self._shared_step(batch)
-        contrastive_loss = self._compute_pretrain_loss(*contrastive)
+        pretrain_loss = self._compute_pretrain_loss(*contrastive)
         self.log("train_loss", loss)
 
         if self.current_epoch < self.pretrain_epochs:
-            return contrastive_loss
+            return pretrain_loss
         else:
             lam = self.start_loss_coefficient / (self.current_epoch + 1) \
                                * (self.pretrain_epochs + 1)
             lam = max(lam, self.end_loss_coefficient)
-            return loss + contrastive_loss * lam
+            return loss + pretrain_loss * lam
 
     def validation_step(self, batch, batch_idx):
         """

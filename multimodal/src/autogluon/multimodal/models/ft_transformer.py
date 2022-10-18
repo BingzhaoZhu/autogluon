@@ -436,15 +436,16 @@ class FT_Transformer(nn.Module):
             x = self.activation(x)
 
             if self.cat_out:
-                x_cat = x[:, :-len(self.category_sizes), :]
+                x_cat = x[:, :len(self.category_sizes), :]
                 cat_out = [f(x_cat[:, i]) for i, f in enumerate(self.cat_out)]
             else:
                 cat_out = None
 
             x_num = x
             if self.category_sizes:
-                x_num = x[:, -len(self.category_sizes):, :]
-            num_out = self.num_out(x_num).squeeze()
+                x_num = x[:, len(self.category_sizes):, :]
+            num_out = [f(x_num[:, i]) for i, f in enumerate(self.num_out)]
+            num_out = torch.concat(num_out, dim=1)
             return {"num_out": num_out, "cat_out": cat_out}
 
     def __init__(
