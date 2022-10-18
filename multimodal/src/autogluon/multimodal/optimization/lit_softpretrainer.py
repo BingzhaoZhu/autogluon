@@ -252,9 +252,9 @@ class SoftLitModule(pl.LightningModule):
         corrupted_batch = self.contrastive_fn(batch)
         output = self.model(batch)
         original_view, corrupted_view, reconstruction = None, None, None
-        if self.loss_mixup == "reconstruction":
+        if self.loss_mixup in ["both", "reconstruction"]:
             reconstruction = self.model(corrupted_batch, head="reconstruction")
-        elif self.loss_mixup == "contrastive":
+        elif self.loss_mixup in ["both", "contrastive"]:
             original_view = self.model(batch, head="contrastive_1")
             corrupted_view = self.model(corrupted_batch, head="contrastive_2")
 
@@ -291,7 +291,7 @@ class SoftLitModule(pl.LightningModule):
             lam = self.start_loss_coefficient / (self.current_epoch + 1) \
                                * (self.pretrain_epochs + 1)
             lam = max(lam, self.end_loss_coefficient)
-            return loss + pretrain_loss * lam
+            return loss if lam == 0 else loss + pretrain_loss * lam
 
     def validation_step(self, batch, batch_idx):
         """
