@@ -48,19 +48,12 @@ class InfoNCELoss(nn.Module):
 
     def forward(self, z_i, z_j):
         r"""
-        Parameters
-        ----------
-        g_projs: Tuple
-            Tuple with the two tensors corresponding to the output of the two
-            projection heads, as described 'SAINT: Improved Neural Networks
-            for Tabular Data via Row Attention and Contrastive Pre-Training'.
-        Examples
-        --------
-        >>> import torch
-        >>> from pytorch_widedeep.losses import InfoNCELoss
-        >>> g_projs = (torch.rand(5, 5), torch.rand(5, 5))
-        >>> loss = InfoNCELoss()
-        >>> res = loss(g_projs)
+        Args:
+            z_i (torch.tensor): anchor batch of samples
+            z_j (torch.tensor): positive batch of samples
+
+        Returns:
+            float: loss
         """
         z, z_ = z_i, z_j
 
@@ -79,7 +72,7 @@ class InfoNCELoss(nn.Module):
         return (loss + loss_) / 2.0
 
 class NTXent(nn.Module):
-    def __init__(self, temperature=1.0):
+    def __init__(self, temperature=0.1):
         """NT-Xent loss for contrastive learning using cosine distance as similarity metric as used in [SimCLR](https://arxiv.org/abs/2002.05709).
         Implementation adapted from https://theaisummer.com/simclr/#simclr-loss-implementation
 
@@ -296,3 +289,19 @@ class ContrastiveTransformations:
     #             batch[permodel.numerical_key] = torch.where(corruption_mask, random_sample, numerical_features)
     #     return batch
 
+
+import torch.nn.functional as F
+
+class ReconstructionLoss(nn.Module):
+
+    def __init__(self,):
+        super().__init__()
+
+    def loss_fn(self, pred_num, pred_cat, target_num, target_cat, mask_num, mask_cat):
+
+        loss = F.mse_loss(pred_num, target_num)
+
+        if pred_cat:
+            for i, p in enumerate(pred_cat):
+                loss += F.cross_entropy(p, target_cat[:, i].long())
+        return loss

@@ -301,27 +301,28 @@ class MultimodalFusionTransformer(nn.Module):
 
         self.heads = nn.ModuleDict(
             {
-                "downstream": FT_Transformer.Head(
+                "target": FT_Transformer.Head(
                     d_in=in_features,
                     d_out=num_classes,
                     bias=True,
                     activation=head_activation,
                     normalization=head_normalization,
                 ),
-                "projection_1": FT_Transformer.ProjectionHead(
+                "contrastive_1": FT_Transformer.ContrastiveHead(
                     d_in=in_features,
                     d_out=in_features,
                     bias=True,
                     activation=head_activation,
                     normalization="identity",
                 ),
-                "projection_2": FT_Transformer.ProjectionHead(
+                "contrastive_2": FT_Transformer.ContrastiveHead(
                     d_in=in_features,
                     d_out=in_features,
                     bias=True,
                     activation=head_activation,
                     normalization="identity",
                 ),
+                "reconstruction": None,
             }
         )
 
@@ -356,7 +357,7 @@ class MultimodalFusionTransformer(nn.Module):
     def forward(
         self,
         batch: dict,
-        head: Optional[str] = "downstream",
+        head: Optional[str] = "target",
     ):
         multimodal_features = []
         output = {}

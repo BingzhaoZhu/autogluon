@@ -189,8 +189,8 @@ class SoftLitModule(pl.LightningModule):
             weight = per_output[WEIGHT] if WEIGHT in per_output else 1
             loss += (
                     self.pretrain_loss_func(
-                        z_i=per_output[LOGITS].squeeze(dim=1),
-                        z_j=per_positive[LOGITS].squeeze(dim=1),
+                        z_i=per_output[LOGITS],
+                        z_j=per_positive[LOGITS],
                     )
                     * weight
             )
@@ -248,8 +248,8 @@ class SoftLitModule(pl.LightningModule):
             original_view = self.model(batch)
             corrupted_view = self.model(corrupted_batch)
         elif self.loss_mixup == "pretrain":
-            original_view = self.model(batch, head="projection_1")
-            corrupted_view = self.model(corrupted_batch, head="projection_2")
+            original_view = self.model(batch, head="contrastive_1")
+            corrupted_view = self.model(corrupted_batch, head="contrastive_2")
         else:
             original_view, corrupted_view = None, None
         contrastive = (original_view, corrupted_view)
@@ -282,10 +282,10 @@ class SoftLitModule(pl.LightningModule):
         if self.current_epoch < self.pretrain_epochs:
             return contrastive_loss
         else:
-            loss_coefficient = self.start_loss_coefficient / (self.current_epoch + 1) \
+            lam = self.start_loss_coefficient / (self.current_epoch + 1) \
                                * (self.pretrain_epochs + 1)
-            loss_coefficient = max(loss_coefficient, self.end_loss_coefficient)
-            return loss + contrastive_loss * loss_coefficient
+            lam = max(lam, self.end_loss_coefficient)
+            return loss + contrastive_loss * lam
 
     def validation_step(self, batch, batch_idx):
         """
