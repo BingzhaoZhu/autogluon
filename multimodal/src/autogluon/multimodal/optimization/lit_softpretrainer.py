@@ -208,7 +208,6 @@ class SoftLitModule(pl.LightningModule):
         output: Dict,
         label: torch.Tensor,
     ):
-
         loss = 0
         for _, per_output in output.items():
             weight = per_output[WEIGHT] if WEIGHT in per_output else 1
