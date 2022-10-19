@@ -244,6 +244,7 @@ class MultimodalFusionTransformer(nn.Module):
         adapt_in_features: Optional[str] = None,
         loss_weight: Optional[float] = None,
         row_attention: Optional[bool] = False,
+        global_token: Optional[bool] = False,
         num_numerical_columns: Optional[int] = None,
         num_categories: Optional[List[int]] = None,
     ):
@@ -298,6 +299,7 @@ class MultimodalFusionTransformer(nn.Module):
             d_out=hidden_features,
             projection=False,
             row_attention=row_attention,
+            global_token=global_token,
         )
 
         self.heads = nn.ModuleDict(

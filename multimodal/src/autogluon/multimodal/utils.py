@@ -898,6 +898,7 @@ def create_model(
             adapt_in_features=model_config.adapt_in_features,
             loss_weight=model_config.weight if hasattr(model_config, "weight") else None,
             row_attention=model_config.row_attention,
+            global_token=model_config.global_token,
             num_numerical_columns=num_numerical_columns,
             num_categories=num_categories,
         )

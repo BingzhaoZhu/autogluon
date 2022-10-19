@@ -180,6 +180,7 @@ model:
     head_activation: "relu"
     data_types:
     row_attention: False
+    global_token: False
   fusion_hierarchical_transformer:
     hidden_size: 192
     n_blocks: 3

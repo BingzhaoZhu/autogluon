@@ -473,6 +473,7 @@ class FT_Transformer(nn.Module):
         d_out: int,
         projection: Optional[bool] = False,
         row_attention: Optional[bool] = False,
+        global_token: Optional[bool] = False,
     ) -> None:
         super().__init__()
         if row_attention:
@@ -527,6 +528,7 @@ class FT_Transformer(nn.Module):
         self.prenormalization = prenormalization
         self.last_layer_query_idx = last_layer_query_idx
         self.row_attention = row_attention
+        self.global_token = global_token
 
         self.blocks = nn.ModuleList([])
         for layer_idx in range(n_blocks):
@@ -640,7 +642,7 @@ class FT_Transformer(nn.Module):
 
             query_idx = self.last_layer_query_idx if layer_idx + 1 == len(self.blocks) else None
 
-            if self.row_attention:
+            if self.global_token:
                 x = torch.concat(
                     [torch.mean(x, dim=1).unsqueeze(1), x],
                     dim=1,
@@ -662,12 +664,6 @@ class FT_Transformer(nn.Module):
             x = layer["output"](x)
 
             if self.row_attention and layer_idx + 1 == len(self.blocks):
-                # x_ = x[:, :-1, :]
-                # batch_size, n_tokens, d_token = x.shape
-                # x = (
-                #     x[:, -1, :]
-                #     .unsqueeze(0)
-                # )
                 x = torch.transpose(x, 0, 1)
 
                 x_residual = self._start_residual(layer, "row_attention", x)
@@ -683,14 +679,10 @@ class FT_Transformer(nn.Module):
                 x = self._end_residual(layer, "row_ffn", x, x_residual)
                 x = layer["row_output"](x)
 
-                # x = (
-                #     x.squeeze(0)
-                #     .reshape(batch_size, 1, d_token)
-                # )
-                # x = torch.concat((x_, x), dim=1)
                 x = torch.transpose(x, 0, 1)
 
-            x = x[:, 1:]
+            if self.global_token:
+                x = x[:, 1:]
 
 
         x = self.head(x)
