@@ -366,15 +366,13 @@ class FT_Transformer(nn.Module):
             super().__init__()
             self.normalization = _make_nn_module(normalization, d_in)
             self.activation = _make_nn_module(activation)
-            self.linear1 = nn.Linear(d_in, d_in, bias)
-            self.linear2 = nn.Linear(d_in, d_out, bias)
+            self.linear = nn.Linear(d_in, d_out, bias)
 
         def forward(self, x: Tensor) -> Tensor:
             x = x[:, -1]
-            x = self.linear1(x)
             x = self.normalization(x)
             x = self.activation(x)
-            x = self.linear2(x)
+            x = self.linear(x)
             return x
 
     class ContrastiveHead(nn.Module):

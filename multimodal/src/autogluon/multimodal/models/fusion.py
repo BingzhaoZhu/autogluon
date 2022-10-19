@@ -334,14 +334,6 @@ class MultimodalFusionTransformer(nn.Module):
             }
         )
 
-        self.pretrain_head = FT_Transformer.Head(
-            d_in=in_features,
-            d_out=in_features,
-            bias=True,
-            activation=head_activation,
-            normalization=head_normalization,
-        ) #if self.pretrain else None
-
         self.cls_token = CLSToken(
             d_token=in_features,
             initialization="uniform",
