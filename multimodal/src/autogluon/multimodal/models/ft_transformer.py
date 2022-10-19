@@ -366,13 +366,15 @@ class FT_Transformer(nn.Module):
             super().__init__()
             self.normalization = _make_nn_module(normalization, d_in)
             self.activation = _make_nn_module(activation)
-            self.linear = nn.Linear(d_in, d_out, bias)
+            self.linear_first = nn.Linear(d_in, d_in, bias)
+            self.linear_second = nn.Linear(d_in, d_out, bias)
 
         def forward(self, x: Tensor) -> Tensor:
             x = x[:, -1]
+            x = self.linear_first(x)
             x = self.normalization(x)
             x = self.activation(x)
-            x = self.linear(x)
+            x = self.linear_second(x)
             return x
 
     class ContrastiveHead(nn.Module):
@@ -638,11 +640,11 @@ class FT_Transformer(nn.Module):
 
             query_idx = self.last_layer_query_idx if layer_idx + 1 == len(self.blocks) else None
 
-            # if self.row_attention:
-            #     x = torch.concat(
-            #         [torch.mean(x, dim=1).unsqueeze(1), x],
-            #         dim=1,
-            #     )
+            if self.row_attention and layer_idx == 0:
+                x = torch.concat(
+                    [torch.mean(x, dim=1).unsqueeze(1), x],
+                    dim=1,
+                )
 
             x_residual = self._start_residual(layer, "attention", x)
             x_residual, _ = layer["attention"](

@@ -1736,6 +1736,7 @@ class MultiModalPredictor:
         if self._pipeline == OBJECT_DETECTION or self._pipeline == OCR_TEXT_DETECTION:
             ret_type = BBOX
 
+        data_ = copy.deepcopy(data)
         data.reset_index(drop=True, inplace=True)
         perm = np.random.permutation(data.shape[0])
         data = data.reindex(perm)
@@ -1769,7 +1770,7 @@ class MultiModalPredictor:
         pred = pred[inverse_perm]
 
         if (as_pandas is None and isinstance(data, pd.DataFrame)) or as_pandas is True:
-            pred = self._as_pandas(data=data, to_be_converted=pred)
+            pred = self._as_pandas(data=data_, to_be_converted=pred)
 
         return pred
 
@@ -1814,7 +1815,7 @@ class MultiModalPredictor:
             ret_type = LOGITS
 
         # shuffle test data
-        # data = copy.deepcopy(data)
+        data_ = copy.deepcopy(data)
         data.reset_index(drop=True, inplace=True)
         perm = np.random.permutation(data.shape[0])
         data = data.reindex(perm)
@@ -1853,7 +1854,7 @@ class MultiModalPredictor:
                 prob = prob[:, pos_label]
 
         if (as_pandas is None and isinstance(data, pd.DataFrame)) or as_pandas is True:
-            prob = self._as_pandas(data=data, to_be_converted=prob)
+            prob = self._as_pandas(data=data_, to_be_converted=prob)
 
         return prob
 
