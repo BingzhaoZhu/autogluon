@@ -1736,6 +1736,11 @@ class MultiModalPredictor:
         if self._pipeline == OBJECT_DETECTION or self._pipeline == OCR_TEXT_DETECTION:
             ret_type = BBOX
 
+        data.reset_index(drop=True, inplace=True)
+        perm = np.random.permutation(data.shape[0])
+        data = data.reindex(perm)
+        data.reset_index(drop=True, inplace=True)
+
         if candidate_data:
             pred = self._match_queries_and_candidates(
                 query_data=data,
@@ -1758,6 +1763,10 @@ class MultiModalPredictor:
                     pred = logits_or_prob.argmax(axis=1)
                 else:
                     pred = logits_or_prob
+
+        # unshuffle prediction
+        inverse_perm = np.argsort(perm)
+        pred = pred[inverse_perm]
 
         if (as_pandas is None and isinstance(data, pd.DataFrame)) or as_pandas is True:
             pred = self._as_pandas(data=data, to_be_converted=pred)

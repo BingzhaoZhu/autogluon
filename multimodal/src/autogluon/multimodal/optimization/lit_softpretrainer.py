@@ -288,7 +288,7 @@ class SoftLitModule(pl.LightningModule):
         else:
             # lam = self.start_loss_coefficient / (self.current_epoch + 1) \
             #                    * (self.pretrain_epochs + 1)
-            lam = self.start_loss_coefficient * (0.9 ** (self.current_epoch - self.pretrain_epochs))
+            lam = self.start_loss_coefficient * (0.8 ** (self.current_epoch - self.pretrain_epochs))
             lam = max(lam, self.end_loss_coefficient)
             return loss if lam == 0 else loss * (1-lam) + pretrain_loss * lam
 
