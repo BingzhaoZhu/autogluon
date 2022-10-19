@@ -662,7 +662,7 @@ class FT_Transformer(nn.Module):
             x = layer["output"](x)
 
             if self.row_attention and layer_idx + 1 == len(self.blocks):
-                x_ = x[:, :-1, :]
+                x_ = x[:, 1:-1, :]
                 batch_size, n_tokens, d_token = x.shape
                 x = (
                     x[:, -1, :]
