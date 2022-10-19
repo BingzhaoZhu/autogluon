@@ -245,7 +245,7 @@ class MultimodalFusionTransformer(nn.Module):
         loss_weight: Optional[float] = None,
         row_attention: Optional[bool] = False,
         num_numerical_columns: Optional[int] = None,
-        num_categories: Optional[List[int]]= None,
+        num_categories: Optional[List[int]] = None,
     ):
         super().__init__()
         logger.debug("initializing MultimodalFusionTransformer")
