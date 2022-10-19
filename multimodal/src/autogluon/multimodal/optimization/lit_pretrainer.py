@@ -242,7 +242,7 @@ class ContrastiveTransformations:
             if hasattr(permodel, "numerical_key"):
                 numerical_features = batch[permodel.numerical_key]
                 _, m = numerical_features.size()
-                indices = torch.argsort(torch.rand(*numerical_features.shape), dim=0)
+                indices = torch.randint(high=batch_size, size=(batch_size, m))
                 random_sample = numerical_features[indices, torch.arange(m).unsqueeze(0)].clone()
                 batch[permodel.numerical_key] = torch.where(corruption_mask[:, feature_idx:feature_idx+m],
                                                             random_sample, numerical_features)
