@@ -642,15 +642,15 @@ class FT_Transformer(nn.Module):
 
             query_idx = self.last_layer_query_idx if layer_idx + 1 == len(self.blocks) else None
 
-            if self.global_token:
-                x = torch.concat(
-                    [torch.mean(x, dim=0).unsqueeze(0), x],
-                    dim=0,
-                )
-                x = torch.concat(
-                    [torch.mean(x, dim=1).unsqueeze(1), x],
-                    dim=1,
-                )
+            # if self.global_token:
+            #     x = torch.concat(
+            #         [torch.mean(x, dim=0).unsqueeze(0), x],
+            #         dim=0,
+            #     )
+            #     x = torch.concat(
+            #         [torch.mean(x, dim=1).unsqueeze(1), x],
+            #         dim=1,
+            #     )
 
             x_residual = self._start_residual(layer, "attention", x)
             x_residual, _ = layer["attention"](
@@ -668,6 +668,11 @@ class FT_Transformer(nn.Module):
             x = layer["output"](x)
 
             if self.row_attention and layer_idx + 1 == len(self.blocks):
+                x = torch.concat(
+                    [torch.mean(x, dim=0).unsqueeze(0), x],
+                    dim=0,
+                )
+
                 x = torch.transpose(x, 0, 1)
 
                 x_residual = self._start_residual(layer, "row_attention", x)
@@ -685,8 +690,10 @@ class FT_Transformer(nn.Module):
 
                 x = torch.transpose(x, 0, 1)
 
-            if self.global_token:
-                x = x[1:, 1:]
+                x = x[1:]
+
+            # if self.global_token:
+            #     x = x[1:, 1:]
 
 
         x = self.head(x)
