@@ -531,6 +531,29 @@ class FT_Transformer(nn.Module):
         self.global_token = global_token
 
         self.blocks = nn.ModuleList([])
+        if self.row_attention:
+            self.row_attention_layers = nn.ModuleDict(
+                {
+                    "row_attention": MultiheadAttention(
+                        d_token=d_token,
+                        n_heads=attention_n_heads,
+                        dropout=attention_dropout,
+                        bias=True,
+                        initialization=attention_initialization,
+                    ),
+                    "row_ffn": FT_Transformer.FFN(
+                        d_token=d_token,
+                        d_hidden=ffn_d_hidden,
+                        bias_first=True,
+                        bias_second=True,
+                        dropout=ffn_dropout,
+                        activation=ffn_activation,
+                    ),
+                    "row_attention_residual_dropout": nn.Dropout(residual_dropout),
+                    "row_ffn_residual_dropout": nn.Dropout(residual_dropout),
+                    "row_output": nn.Identity(),  # for hooks-based introspection
+                }
+            )
         for layer_idx in range(n_blocks):
             layer = nn.ModuleDict(
                 {
@@ -564,28 +587,9 @@ class FT_Transformer(nn.Module):
                 else:
                     assert kv_compression_sharing == "key-value", _INTERNAL_ERROR_MESSAGE
 
-            if row_attention and layer_idx == 0: #+ 1 == n_blocks:
+            if row_attention and layer_idx + 1 == n_blocks:
                 layer.update(
-                    {
-                        "row_attention": MultiheadAttention(
-                            d_token=d_token,
-                            n_heads=attention_n_heads,
-                            dropout=attention_dropout,
-                            bias=True,
-                            initialization=attention_initialization,
-                        ),
-                        "row_ffn": FT_Transformer.FFN(
-                            d_token=d_token,
-                            d_hidden=ffn_d_hidden,
-                            bias_first=True,
-                            bias_second=True,
-                            dropout=ffn_dropout,
-                            activation=ffn_activation,
-                        ),
-                        "row_attention_residual_dropout": nn.Dropout(residual_dropout),
-                        "row_ffn_residual_dropout": nn.Dropout(residual_dropout),
-                        "row_output": nn.Identity(),  # for hooks-based introspection
-                    }
+                    self.row_attention_layers
                 )
             self.blocks.append(layer)
 
@@ -618,6 +622,8 @@ class FT_Transformer(nn.Module):
         else:
             assert stage in ["attention", "ffn", "row_attention", "row_ffn"], _INTERNAL_ERROR_MESSAGE
         x_residual = x
+        # if self.row_attention:
+        #     return x_residual
         if self.prenormalization:
             norm_key = f"{stage}_normalization"
             if norm_key in layer:
@@ -631,6 +637,8 @@ class FT_Transformer(nn.Module):
             assert stage in ["attention", "ffn", "row_attention", "row_ffn"], _INTERNAL_ERROR_MESSAGE
         x_residual = layer[f"{stage}_residual_dropout"](x_residual)
         x = x + x_residual
+        # if self.row_attention:
+        #     return x
         if not self.prenormalization:
             x = layer[f"{stage}_normalization"](x)
         return x
@@ -641,33 +649,6 @@ class FT_Transformer(nn.Module):
             layer = cast(nn.ModuleDict, layer)
 
             query_idx = self.last_layer_query_idx if layer_idx + 1 == len(self.blocks) else None
-
-            if self.row_attention and layer_idx == 0: #+ 1 == len(self.blocks):
-                if self.global_token:
-                    x = torch.concat(
-                        [torch.mean(x, dim=0).unsqueeze(0), x],
-                        dim=0,
-                    )
-
-                x = torch.transpose(x, 0, 1)
-
-                x_residual = self._start_residual(layer, "row_attention", x)
-                x_residual, _ = layer["row_attention"](
-                    x_residual,
-                    x_residual,
-                    None, None,
-                )
-                x = self._end_residual(layer, "row_attention", x, x_residual)
-
-                x_residual = self._start_residual(layer, "row_ffn", x)
-                x_residual = layer["row_ffn"](x_residual)
-                x = self._end_residual(layer, "row_ffn", x, x_residual)
-                x = layer["row_output"](x)
-
-                x = torch.transpose(x, 0, 1)
-
-                if self.global_token:
-                    x = x[1:]
 
             if self.global_token:
                 x = torch.concat(
@@ -692,6 +673,36 @@ class FT_Transformer(nn.Module):
 
             if self.global_token:
                 x = x[:, 1:]
+
+            if self.row_attention and layer_idx + 1 == len(self.blocks):
+                if self.global_token:
+                    x = torch.concat(
+                        [torch.mean(x, dim=0).unsqueeze(0), x],
+                        dim=0,
+                    )
+
+                x_ = x[:, :-1]
+                x = x[:, -1].unsqueeze(1)
+                x = torch.transpose(x, 0, 1)
+
+                x_residual = self._start_residual(layer, "row_attention", x)
+                x_residual, _ = layer["row_attention"](
+                    x_residual,
+                    x_residual,
+                    None, None,
+                )
+                x = self._end_residual(layer, "row_attention", x, x_residual)
+
+                x_residual = self._start_residual(layer, "row_ffn", x)
+                x_residual = layer["row_ffn"](x_residual)
+                x = self._end_residual(layer, "row_ffn", x, x_residual)
+                x = layer["row_output"](x)
+
+                x = torch.transpose(x, 0, 1)
+                x = torch.concat([x_, x], dim=1)
+
+                if self.global_token:
+                    x = x[1:]
 
 
         x = self.head(x)
