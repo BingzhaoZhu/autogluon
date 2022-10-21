@@ -396,7 +396,7 @@ class FT_Transformer(nn.Module):
             self.linear2 = nn.Linear(d_in, d_out, bias)
 
         def forward(self, x: Tensor) -> Tensor:
-            x = x[:, :-1]
+            x = x[:, -1]
             x = self.linear1(x)
             x = self.normalization(x)
             x = self.activation(x)
