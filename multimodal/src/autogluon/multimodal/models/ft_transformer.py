@@ -554,6 +554,9 @@ class FT_Transformer(nn.Module):
                     "row_output": nn.Identity(),  # for hooks-based introspection
                 }
             )
+            for p in self.row_attention_layers.parameters():
+                nn.init.zeros_(p)
+
         for layer_idx in range(n_blocks):
             layer = nn.ModuleDict(
                 {
@@ -587,7 +590,7 @@ class FT_Transformer(nn.Module):
                 else:
                     assert kv_compression_sharing == "key-value", _INTERNAL_ERROR_MESSAGE
 
-            if row_attention and layer_idx + 1 == n_blocks:
+            if row_attention: # and layer_idx + 1 == n_blocks:
                 layer.update(
                     self.row_attention_layers
                 )
@@ -681,8 +684,8 @@ class FT_Transformer(nn.Module):
                         dim=0,
                     )
 
-                x_ = x[:, :-1]
-                x = x[:, -1].unsqueeze(1)
+                # x_ = x[:, :-1]
+                # x = x[:, -1].unsqueeze(1)
                 x = torch.transpose(x, 0, 1)
 
                 x_residual = self._start_residual(layer, "row_attention", x)
@@ -699,7 +702,7 @@ class FT_Transformer(nn.Module):
                 x = layer["row_output"](x)
 
                 x = torch.transpose(x, 0, 1)
-                x = torch.concat([x_, x], dim=1)
+                # x = torch.concat([x_, x], dim=1)
 
                 if self.global_token:
                     x = x[1:]

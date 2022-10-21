@@ -225,12 +225,15 @@ class LitModule(pl.LightningModule):
         """
         output, loss = self._shared_step(batch)
         self.log("train_loss", loss)
+        if hasattr(self.model.fusion_transformer, "row_attention_layers"):
+            row_attention_parameters = self.model.fusion_transformer.row_attention_layers.parameters()
+            reg = 0
+            for p in row_attention_parameters:
+                reg += torch.norm(p, 1)
+            print(reg)
+            return loss + reg * 0.001
 
-        row_attention_parameters = self.model.fusion_transformer.row_attention_layers.parameters()
-        reg = 0
-        for p in row_attention_parameters:
-            reg += 0.1 * torch.norm(p, 1)
-        return loss + reg
+        return loss
 
     def validation_step(self, batch, batch_idx):
         """

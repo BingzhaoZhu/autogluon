@@ -320,14 +320,14 @@ class MultimodalFusionTransformer(nn.Module):
                     d_out=in_features,
                     bias=True,
                     activation=head_activation,
-                    normalization="identity",
+                    normalization=head_normalization,
                 ),
                 "contrastive_2": FT_Transformer.ContrastiveHead(
                     d_in=in_features,
                     d_out=in_features,
                     bias=True,
                     activation=head_activation,
-                    normalization="identity",
+                    normalization=head_normalization,
                 ),
                 "reconstruction": FT_Transformer.ReconstructionHead(
                     d_in=in_features,
