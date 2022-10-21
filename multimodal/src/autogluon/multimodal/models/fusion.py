@@ -1,3 +1,4 @@
+import copy
 import logging
 from typing import List, Optional
 
@@ -302,6 +303,9 @@ class MultimodalFusionTransformer(nn.Module):
             global_token=global_token,
         )
 
+        self.pretrain_model = copy.deepcopy(self.model)
+        self.pretrain_adapter = copy.deepcopy(self.adapter)
+
         self.heads = nn.ModuleDict(
             {
                 "target": FT_Transformer.Head(
@@ -312,14 +316,14 @@ class MultimodalFusionTransformer(nn.Module):
                     normalization=head_normalization,
                 ),
                 "contrastive_1": FT_Transformer.ContrastiveHead(
-                    d_in=(num_numerical_columns+len(num_categories))*in_features,
+                    d_in=in_features,
                     d_out=in_features,
                     bias=True,
                     activation=head_activation,
                     normalization="identity",
                 ),
                 "contrastive_2": FT_Transformer.ContrastiveHead(
-                    d_in=(num_numerical_columns+len(num_categories))*in_features,
+                    d_in=in_features,
                     d_out=in_features,
                     bias=True,
                     activation=head_activation,
@@ -363,7 +367,9 @@ class MultimodalFusionTransformer(nn.Module):
     ):
         multimodal_features = []
         output = {}
-        for per_model, per_adapter in zip(self.model, self.adapter):
+        model = self.model if head == "target" else self.pretrain_model
+        adapter = self.adapter if head == "target" else self.pretrain_adapter
+        for per_model, per_adapter in zip(model, adapter):
             per_output = per_model(batch)
             multimodal_feature = per_adapter(per_output[per_model.prefix][FEATURES])
             if multimodal_feature.ndim == 2:

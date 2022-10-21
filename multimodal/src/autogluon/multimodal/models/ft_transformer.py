@@ -396,7 +396,7 @@ class FT_Transformer(nn.Module):
             self.linear2 = nn.Linear(d_in, d_out, bias)
 
         def forward(self, x: Tensor) -> Tensor:
-            x = x[:, :-1].flatten(1)
+            x = x[:, :-1]
             x = self.linear1(x)
             x = self.normalization(x)
             x = self.activation(x)
@@ -564,7 +564,7 @@ class FT_Transformer(nn.Module):
                 else:
                     assert kv_compression_sharing == "key-value", _INTERNAL_ERROR_MESSAGE
 
-            if row_attention and layer_idx + 1 == n_blocks:
+            if row_attention and layer_idx == 0: #+ 1 == n_blocks:
                 layer.update(
                     {
                         "row_attention": MultiheadAttention(
@@ -642,31 +642,7 @@ class FT_Transformer(nn.Module):
 
             query_idx = self.last_layer_query_idx if layer_idx + 1 == len(self.blocks) else None
 
-            if self.global_token:
-                x = torch.concat(
-                    [torch.mean(x, dim=1).unsqueeze(1), x],
-                    dim=1,
-                )
-
-            x_residual = self._start_residual(layer, "attention", x)
-            x_residual, _ = layer["attention"](
-                x_residual if query_idx is None else x_residual[:, query_idx],
-                x_residual,
-                *self._get_kv_compressions(layer),
-            )
-            if query_idx is not None:
-                x = x[:, query_idx]
-            x = self._end_residual(layer, "attention", x, x_residual)
-
-            x_residual = self._start_residual(layer, "ffn", x)
-            x_residual = layer["ffn"](x_residual)
-            x = self._end_residual(layer, "ffn", x, x_residual)
-            x = layer["output"](x)
-
-            if self.global_token:
-                x = x[:, 1:]
-
-            if self.row_attention and layer_idx + 1 == len(self.blocks):
+            if self.row_attention and layer_idx == 0: #+ 1 == len(self.blocks):
                 if self.global_token:
                     x = torch.concat(
                         [torch.mean(x, dim=0).unsqueeze(0), x],
@@ -692,6 +668,30 @@ class FT_Transformer(nn.Module):
 
                 if self.global_token:
                     x = x[1:]
+
+            if self.global_token:
+                x = torch.concat(
+                    [torch.mean(x, dim=1).unsqueeze(1), x],
+                    dim=1,
+                )
+
+            x_residual = self._start_residual(layer, "attention", x)
+            x_residual, _ = layer["attention"](
+                x_residual if query_idx is None else x_residual[:, query_idx],
+                x_residual,
+                *self._get_kv_compressions(layer),
+            )
+            if query_idx is not None:
+                x = x[:, query_idx]
+            x = self._end_residual(layer, "attention", x, x_residual)
+
+            x_residual = self._start_residual(layer, "ffn", x)
+            x_residual = layer["ffn"](x_residual)
+            x = self._end_residual(layer, "ffn", x, x_residual)
+            x = layer["output"](x)
+
+            if self.global_token:
+                x = x[:, 1:]
 
 
         x = self.head(x)
