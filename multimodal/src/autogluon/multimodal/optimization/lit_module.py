@@ -230,8 +230,7 @@ class LitModule(pl.LightningModule):
             reg = 0
             for p in row_attention_parameters:
                 reg += torch.norm(p, 1)
-            print(reg)
-            return loss + reg * 0.001
+            return loss + reg * 0.01
 
         return loss
 
