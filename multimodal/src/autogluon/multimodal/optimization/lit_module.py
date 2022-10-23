@@ -229,8 +229,8 @@ class LitModule(pl.LightningModule):
             row_attention_parameters = self.model.fusion_transformer.row_attention_layers.parameters()
             reg = 0
             for p in row_attention_parameters:
-                reg += torch.norm(p, 1)
-            return loss + reg * 0
+                reg += torch.norm(p, 2)
+            return loss + reg * 0.01
 
         return loss
 
