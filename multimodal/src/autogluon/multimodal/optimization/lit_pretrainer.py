@@ -39,7 +39,7 @@ class InfoNCELoss(nn.Module):
         Loss reduction method
     """
 
-    def __init__(self, temperature: float = 0.1, reduction: str = "mean"):
+    def __init__(self, temperature: float = 0.5, reduction: str = "mean"):
 
         super(InfoNCELoss, self).__init__()
 

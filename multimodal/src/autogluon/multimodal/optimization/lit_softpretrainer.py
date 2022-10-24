@@ -290,7 +290,7 @@ class SoftLitModule(pl.LightningModule):
             #                    * (self.pretrain_epochs + 1)
             lam = self.start_loss_coefficient * (0.9 ** (self.current_epoch - self.pretrain_epochs))
             lam = max(lam, self.end_loss_coefficient)
-            return loss if lam == 0 else loss * (1-lam) + pretrain_loss * lam
+            return loss if lam == 0 else pretrain_loss * lam + loss # * (1-lam)
 
     def validation_step(self, batch, batch_idx):
         """

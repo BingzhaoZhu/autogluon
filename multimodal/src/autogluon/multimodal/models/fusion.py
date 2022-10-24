@@ -303,8 +303,8 @@ class MultimodalFusionTransformer(nn.Module):
             global_token=global_token,
         )
 
-        self.pretrain_model = copy.deepcopy(self.model)
-        self.pretrain_adapter = copy.deepcopy(self.adapter)
+        # self.pretrain_model = copy.deepcopy(self.model)
+        # self.pretrain_adapter = copy.deepcopy(self.adapter)
 
         self.heads = nn.ModuleDict(
             {
@@ -367,8 +367,8 @@ class MultimodalFusionTransformer(nn.Module):
     ):
         multimodal_features = []
         output = {}
-        model = self.model if head == "target" else self.pretrain_model
-        adapter = self.adapter if head == "target" else self.pretrain_adapter
+        model = self.model # if head == "target" else self.pretrain_model
+        adapter = self.adapter # if head == "target" else self.pretrain_adapter
         for per_model, per_adapter in zip(model, adapter):
             per_output = per_model(batch)
             multimodal_feature = per_adapter(per_output[per_model.prefix][FEATURES])

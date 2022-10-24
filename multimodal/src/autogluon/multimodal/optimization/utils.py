@@ -336,6 +336,10 @@ def get_weight_decay_param_names(model: nn.Module):
         [nn.LayerNorm, nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d, nn.GroupNorm],
     )
     decay_param_names = [name for name in decay_param_names if "bias" not in name]
+    decay_param_names = [name for name in decay_param_names if "cls_token" not in name]
+    decay_param_names = [name for name in decay_param_names if "categorical_feature_tokenizer" not in name]
+    decay_param_names = [name for name in decay_param_names if "numerical_feature_tokenizer" not in name]
+    decay_param_names = [name for name in decay_param_names if "adapter" not in name]
     return decay_param_names
 
 
