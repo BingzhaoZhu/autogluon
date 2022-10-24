@@ -159,7 +159,7 @@ class MultiModalPredictorModel(AbstractModel):
         X = self.preprocess(X, **kwargs)
 
         if self.problem_type == REGRESSION:
-            return self.model.predict(X, as_pandas=False)
+            return self.model.predict(X, as_pandas=False, support_data=support_data)
 
         y_pred_proba = self.model.predict_proba(X, as_pandas=False, support_data=support_data)
         return self._convert_proba_to_unified_form(y_pred_proba)

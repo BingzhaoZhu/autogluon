@@ -684,8 +684,8 @@ class FT_Transformer(nn.Module):
                         dim=0,
                     )
 
-                # x_ = x[:, :-1]
-                # x = x[:, -1].unsqueeze(1)
+                x_ = x[:, :-1]
+                x = x[:, -1].unsqueeze(1)
                 x = torch.transpose(x, 0, 1)
 
                 x_residual = self._start_residual(layer, "row_attention", x)
@@ -702,7 +702,7 @@ class FT_Transformer(nn.Module):
                 x = layer["row_output"](x)
 
                 x = torch.transpose(x, 0, 1)
-                # x = torch.concat([x_, x], dim=1)
+                x = torch.concat([x_, x], dim=1)
 
                 if self.global_token:
                     x = x[1:]

@@ -1708,6 +1708,7 @@ class MultiModalPredictor:
         data: Union[pd.DataFrame, dict, list],
         candidate_data: Optional[Union[pd.DataFrame, dict, list]] = None,
         as_pandas: Optional[bool] = None,
+        support_data: Optional[pd.DataFrame] = None,
     ):
         """
         Predict values for the label column of new data.
@@ -1752,6 +1753,7 @@ class MultiModalPredictor:
             outputs = self._predict(
                 data=data,
                 requires_label=False,
+                support_data=support_data,  ### !!! this is too slow, disabled for now
             )
             logits_or_prob = extract_from_output(outputs=outputs, ret_type=ret_type)
 
