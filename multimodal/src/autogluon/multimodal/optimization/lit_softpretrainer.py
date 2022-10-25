@@ -12,7 +12,7 @@ from torchmetrics.aggregation import BaseAggregator
 from ..constants import AUTOMM, LM_TARGET, LOGITS, T_FEW, TEMPLATE_LOGITS, WEIGHT
 from ..data.mixup import MixupModule, multimodel_mixup
 from .utils import apply_layerwise_lr_decay, apply_single_lr, apply_two_stages_lr, get_lr_scheduler, get_optimizer
-from .lit_pretrainer import NTXent, ContrastiveTransformations, InfoNCELoss, ReconstructionLoss
+from .lit_pretrainer import NTXent, NTXent_distill, ContrastiveTransformations, InfoNCELoss, ReconstructionLoss
 
 logger = logging.getLogger(AUTOMM)
 
@@ -131,7 +131,7 @@ class SoftLitModule(pl.LightningModule):
             )
         self.custom_metric_func = custom_metric_func
 
-        self.contrastive_loss = NTXent() if loss_mixup in ["self_distill"] else InfoNCELoss()
+        self.contrastive_loss = NTXent_distill() if loss_mixup in ["self_distill"] else NTXent()
         self.reconstruction_loss = ReconstructionLoss(model)
         self.contrastive_fn = ContrastiveTransformations(model,
                                                          mode=augmentation_mode,
@@ -293,7 +293,7 @@ class SoftLitModule(pl.LightningModule):
         else:
             # lam = self.start_loss_coefficient / (self.current_epoch + 1) \
             #                    * (self.pretrain_epochs + 1)
-            lam = self.start_loss_coefficient * (0.9 ** (self.current_epoch - self.pretrain_epochs))
+            lam = self.start_loss_coefficient * (0.8 ** (self.current_epoch - self.pretrain_epochs))
             lam = max(lam, self.end_loss_coefficient)
             return loss if lam == 0 else pretrain_loss * lam + loss # * (1-lam)
 
