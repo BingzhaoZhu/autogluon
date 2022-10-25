@@ -39,7 +39,7 @@ class InfoNCELoss(nn.Module):
         Loss reduction method
     """
 
-    def __init__(self, temperature: float = 0.5, reduction: str = "mean"):
+    def __init__(self, temperature: float = 0.1, reduction: str = "mean"):
 
         super(InfoNCELoss, self).__init__()
 
@@ -103,13 +103,13 @@ class NTXent(nn.Module):
         sim_ji = torch.diag(similarity, -batch_size)
         positives = torch.cat([sim_ij, sim_ji], dim=0)
 
-        # mask = (~torch.eye(batch_size * 2, batch_size * 2, dtype=torch.bool)).float().to(z_i.get_device())
+        mask = (~torch.eye(batch_size * 2, batch_size * 2, dtype=torch.bool)).float().to(z_i.get_device())
         numerator = torch.exp(positives / self.temperature)
 
-        # denominator = mask * torch.exp(similarity / self.temperature)
-        # all_losses = -torch.log(numerator / torch.sum(denominator, dim=1))
+        denominator = mask * torch.exp(similarity / self.temperature)
+        all_losses = -torch.log(numerator / torch.mean(denominator, dim=1))
 
-        all_losses = -torch.log(numerator)
+        # all_losses = -torch.log(numerator)
         loss = torch.sum(all_losses) / (2 * batch_size)
 
         return loss
