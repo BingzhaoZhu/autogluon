@@ -402,7 +402,7 @@ def apply_single_lr(
         },
         {
             "params": [p if return_params else n for n, p in model.named_parameters() if (n in decay_param_names and "row" in n)],
-            "weight_decay": 0.01,
+            "weight_decay": 1,
             "lr": lr,
         },
         {
