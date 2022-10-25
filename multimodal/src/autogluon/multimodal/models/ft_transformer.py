@@ -674,6 +674,9 @@ class FT_Transformer(nn.Module):
             x = self._end_residual(layer, "ffn", x, x_residual)
             x = layer["output"](x)
 
+            if self.global_token:
+                x = x[:, 1:]
+
             if self.row_attention and layer_idx + 1 == len(self.blocks):
                 if self.global_token:
                     x = torch.concat(
@@ -703,9 +706,6 @@ class FT_Transformer(nn.Module):
 
                 if self.global_token:
                     x = x[1:]
-
-        if self.global_token:
-            x = x[:, len(self.blocks):]
 
         x = self.head(x)
 

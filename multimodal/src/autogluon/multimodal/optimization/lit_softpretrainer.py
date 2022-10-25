@@ -131,7 +131,7 @@ class SoftLitModule(pl.LightningModule):
             )
         self.custom_metric_func = custom_metric_func
 
-        self.contrastive_loss = InfoNCELoss()
+        self.contrastive_loss = NTXent() if loss_mixup in ["self_distill"] else InfoNCELoss()
         self.reconstruction_loss = ReconstructionLoss(model)
         self.contrastive_fn = ContrastiveTransformations(model,
                                                          mode=augmentation_mode,
@@ -142,6 +142,7 @@ class SoftLitModule(pl.LightningModule):
         self.end_loss_coefficient = end_loss_coefficient
         self.pretrain_epochs = pretrain_epochs
         self.loss_mixup = loss_mixup
+
 
     def _compute_template_loss(
         self,
@@ -253,9 +254,13 @@ class SoftLitModule(pl.LightningModule):
         original_view, corrupted_view, reconstruction = None, None, None
         if self.loss_mixup in ["both", "reconstruction"]:
             reconstruction = self.model(corrupted_batch, head="reconstruction")
-        elif self.loss_mixup in ["both", "contrastive"]:
+        if self.loss_mixup in ["both", "contrastive"]:
             original_view = self.model(batch, head="contrastive_1")
             corrupted_view = self.model(corrupted_batch, head="contrastive_1")
+
+        if self.loss_mixup in ["self_distill"]:
+            original_view = output
+            corrupted_view = self.model(corrupted_batch)
 
         contrastive = (batch, original_view, corrupted_view, reconstruction)
         loss = self._compute_loss(output=output, label=label)

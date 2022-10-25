@@ -107,7 +107,8 @@ class NTXent(nn.Module):
 
         denominator = mask * torch.exp(similarity / self.temperature)
 
-        all_losses = -torch.log(numerator / torch.sum(denominator, dim=1))
+        # all_losses = -torch.log(numerator / torch.sum(denominator, dim=1))
+        all_losses = -torch.log(numerator)
         loss = torch.sum(all_losses) / (2 * batch_size)
 
         return loss
