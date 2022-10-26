@@ -106,17 +106,17 @@ class NTXent(nn.Module):
         # mask = (~torch.eye(batch_size * 2, batch_size * 2, dtype=torch.bool)).float().to(z_i.get_device())
         numerator = torch.exp(positives / self.temperature)
 
-        # denominator = torch.exp(similarity / self.temperature) # * mask
-        # all_losses = -torch.log(numerator / torch.sum(denominator, dim=1))
+        denominator = torch.exp(similarity / self.temperature) # * mask
+        all_losses = -torch.log(numerator / torch.mean(denominator, dim=1))
 
-        all_losses = -torch.log(numerator)
+        # all_losses = -torch.log(numerator)
         loss = torch.sum(all_losses) / (2 * batch_size)
 
         return loss
 
 
 class NTXent_distill(nn.Module):
-    def __init__(self, temperature=10):
+    def __init__(self, temperature=1):
         """NT-Xent loss for contrastive learning using cosine distance as similarity metric as used in [SimCLR](https://arxiv.org/abs/2002.05709).
         Implementation adapted from https://theaisummer.com/simclr/#simclr-loss-implementation
 
