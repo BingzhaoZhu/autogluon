@@ -360,11 +360,25 @@ class MultimodalFusionTransformer(nn.Module):
     def label_key(self):
         return f"{self.prefix}_{LABEL}"
 
-    def forward(
+    def forward_nograd(
         self,
         batch: dict,
         head: Optional[str] = "target",
     ):
+        with torch.no_grad():
+            return self.forward(
+                batch=batch,
+                head=head
+            )
+
+    def forward(
+        self,
+        batch: dict,
+        head: Optional[str] = "target",
+        require_grad: Optional[bool] = True,
+    ):
+        if not require_grad:
+            return self.forward_nograd(batch=batch, head=head)
         multimodal_features = []
         output = {}
         model = self.model # if head == "target" else self.pretrain_model
