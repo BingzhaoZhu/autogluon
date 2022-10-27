@@ -256,7 +256,7 @@ class SoftLitModule(pl.LightningModule):
             reconstruction = self.model(corrupted_batch, head="reconstruction")
         if self.loss_mixup in ["both", "contrastive"]:
             original_view = self.model(batch, head="contrastive_1")
-            corrupted_view = self.model(corrupted_batch, head="contrastive_1")
+            corrupted_view = self.model(corrupted_batch, head="contrastive_2")
 
         if self.loss_mixup in ["self_distill"]:
             original_view = self.model(batch, require_grad=False)
