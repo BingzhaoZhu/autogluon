@@ -259,8 +259,8 @@ class SoftLitModule(pl.LightningModule):
             corrupted_view = self.model(corrupted_batch, head="contrastive_2")
 
         if self.loss_mixup in ["self_distill"]:
-            original_view = self.model(batch, require_grad=False)
-            corrupted_view = self.model(corrupted_batch)
+            original_view = output #self.model(batch, require_grad=True)
+            corrupted_view = self.model(corrupted_batch, require_grad=False)
 
         contrastive = (batch, original_view, corrupted_view, reconstruction)
         loss = self._compute_loss(output=output, label=label)
