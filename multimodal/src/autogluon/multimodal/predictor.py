@@ -843,6 +843,11 @@ class MultiModalPredictor:
             config = self._config
 
         is_pretrain = hyperparameters.pop(PRETRAINER) if PRETRAINER in hyperparameters else False
+        knn_dataloader = hyperparameters.pop("knn_dataloader") if "knn_dataloader" in hyperparameters else False
+        if knn_dataloader:
+            from .data.knn_loader import KnnDataModule as BaseDataModule
+        else:
+            from .data.datamodule import BaseDataModule
 
         config = get_config(
             presets=presets,
@@ -1487,6 +1492,9 @@ class MultiModalPredictor:
                     datamodule=predict_dm,
                 )
 
+        if hasattr(predict_dm, "predict_sampler") and hasattr(predict_dm.predict_sampler, "perm"):
+            self.perm_knn = predict_dm.predict_sampler.perm
+
         if support_data is not None:
             for batch in outputs:
                 for key in batch:
@@ -1767,6 +1775,10 @@ class MultiModalPredictor:
                 else:
                     pred = logits_or_prob
 
+        if hasattr(self, "perm_knn"):
+            inverse_perm = np.argsort(self.perm_knn)
+            pred = pred[inverse_perm]
+
         # unshuffle prediction
         inverse_perm = np.argsort(perm)
         pred = pred[inverse_perm]
@@ -1842,6 +1854,9 @@ class MultiModalPredictor:
             else:
                 prob = logits_or_prob
 
+        if hasattr(self, "perm_knn"):
+            inverse_perm = np.argsort(self.perm_knn)
+            prob = prob[inverse_perm]
         # unshuffle prediction
         inverse_perm = np.argsort(perm)
         prob = prob[inverse_perm]
