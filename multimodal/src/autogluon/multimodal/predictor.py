@@ -67,6 +67,7 @@ from .constants import (
     ZERO_SHOT_IMAGE_CLASSIFICATION,
 )
 from .data.datamodule import BaseDataModule
+from .data.knn_loader import KnnDataModule
 from .data.infer_types import (
     infer_column_types,
     infer_label_column_type_by_problem_type,
@@ -843,11 +844,7 @@ class MultiModalPredictor:
             config = self._config
 
         is_pretrain = hyperparameters.pop(PRETRAINER) if PRETRAINER in hyperparameters else False
-        knn_dataloader = hyperparameters.pop("knn_dataloader") if "knn_dataloader" in hyperparameters else False
-        if knn_dataloader:
-            from .data.knn_loader import KnnDataModule as BaseDataModule
-        else:
-            from .data.datamodule import BaseDataModule
+        self.knn_dataloader = hyperparameters.pop("knn_dataloader") if "knn_dataloader" in hyperparameters else False
 
         config = get_config(
             presets=presets,
@@ -1182,6 +1179,7 @@ class MultiModalPredictor:
         self._config = config
         # save artifacts for the current running, except for model checkpoint, which will be saved in trainer
         self.save(save_path)
+        callbacks_ = copy.deepcopy(callbacks)
 
         blacklist_msgs = ["already configured with model summary"]
         log_filter = LogFilter(blacklist_msgs)
@@ -1229,6 +1227,53 @@ class MultiModalPredictor:
                 datamodule=train_dm,
                 ckpt_path=ckpt_path if resume else None,  # this is to resume training that was broken accidentally
             )
+
+            # if self.knn_dataloader:
+            #     train_dm = KnnDataModule(
+            #         df_preprocessor=df_preprocessor,
+            #         data_processors=data_processors,
+            #         per_gpu_batch_size=config.env.per_gpu_batch_size,
+            #         num_workers=config.env.num_workers,
+            #         train_data=train_df,
+            #         val_data=val_df,
+            #     )
+            #     task.set_row_gradient(True)
+            #
+            #     with apply_log_filter(log_filter):
+            #         trainer = pl.Trainer(
+            #             gpus=num_gpus if not use_ray_lightning else None,  # ray lightning requires not specifying gpus
+            #             auto_select_gpus=config.env.auto_select_gpus if num_gpus != 0 else False,
+            #             num_nodes=config.env.num_nodes,
+            #             precision=precision,
+            #             strategy=strategy,
+            #             benchmark=False,
+            #             deterministic=config.env.deterministic,
+            #             max_epochs=config.optimization.max_epochs,
+            #             max_steps=config.optimization.max_steps,
+            #             max_time=max_time,
+            #             callbacks=callbacks_,
+            #             logger=tb_logger,
+            #             gradient_clip_val=OmegaConf.select(config, "optimization.gradient_clip_val", default=1),
+            #             gradient_clip_algorithm=OmegaConf.select(
+            #                 config, "optimization.gradient_clip_algorithm", default="norm"
+            #             ),
+            #             accumulate_grad_batches=grad_steps,
+            #             log_every_n_steps=OmegaConf.select(config, "optimization.log_every_n_steps", default=10),
+            #             enable_progress_bar=enable_progress_bar,
+            #             fast_dev_run=config.env.fast_dev_run,
+            #             track_grad_norm=OmegaConf.select(config, "optimization.track_grad_norm", default=-1),
+            #             val_check_interval=config.optimization.val_check_interval,
+            #             check_val_every_n_epoch=config.optimization.check_val_every_n_epoch
+            #             if hasattr(config.optimization, "check_val_every_n_epoch")
+            #             else 1,
+            #             reload_dataloaders_every_n_epochs=1,
+            #         )
+            #
+            #     trainer.fit(
+            #         task,
+            #         datamodule=train_dm,
+            #         ckpt_path=ckpt_path if resume else None,  # this is to resume training that was broken accidentally
+            #     )
 
         if trainer.global_rank == 0:
             # We do not perform averaging checkpoint in the case of hpo for each trial

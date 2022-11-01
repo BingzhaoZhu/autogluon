@@ -121,6 +121,7 @@ class LitModule(pl.LightningModule):
                 "which must be used with a customized metric function."
             )
         self.custom_metric_func = custom_metric_func
+        # self.set_row_gradient(False)
 
     def _compute_template_loss(
         self,
@@ -204,6 +205,15 @@ class LitModule(pl.LightningModule):
         loss = self._compute_loss(output=output, label=label)
         return output, loss
 
+    def set_row_gradient(self, enable_grad):
+        if hasattr(self.model.fusion_transformer, "row_attention_layers"):
+            row_attention_parameters = self.model.fusion_transformer.row_attention_layers.parameters()
+            for param in self.model.parameters():
+                param.requires_grad = not enable_grad
+            for param in row_attention_parameters:
+                param.requires_grad = enable_grad
+
+
     def training_step(self, batch, batch_idx):
         """
         Per training step. This function is registered by pl.LightningModule.
@@ -225,13 +235,6 @@ class LitModule(pl.LightningModule):
         """
         output, loss = self._shared_step(batch)
         self.log("train_loss", loss)
-        # if hasattr(self.model.fusion_transformer, "row_attention_layers"):
-        #     row_attention_parameters = self.model.fusion_transformer.row_attention_layers.parameters()
-        #     reg = 0
-        #     for p in row_attention_parameters:
-        #         reg += torch.norm(p, 2)
-        #     print(reg)
-        #     return loss # + reg * 0.01
         return loss
 
     def validation_step(self, batch, batch_idx):
