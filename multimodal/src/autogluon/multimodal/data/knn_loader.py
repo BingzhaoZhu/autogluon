@@ -1,3 +1,5 @@
+import copy
+
 import numpy as np
 import random
 from sklearn.decomposition import PCA
@@ -11,13 +13,19 @@ from ..constants import PREDICT, TEST, TRAIN, VAL
 from .collator import Dict
 from .dataset import BaseDataset
 from .preprocess_dataframe import MultiModalFeaturePreprocessor
+from sklearn.preprocessing import OneHotEncoder
 
 
 class KnnSampler(Sampler):
-    def __init__(self, data_source, batch_size=128):
+    def __init__(self, data_source, batch_size=128, n=1):
         super().__init__(data_source)
-        self.data_source = self.onehot_encode(data_source)
+        self.raw_data_source = data_source
         self.batch_size = batch_size
+        self.pca = PCA(n_components=n)
+        self.encoders = {}
+        self.n = n
+        self.data_source = self.onehot_encode(data_source)
+        self.fit_pca()
 
     def __iter__(self):
         self.perm = self.get_even_clusters()
@@ -28,12 +36,36 @@ class KnnSampler(Sampler):
     def __len__(self) -> int:
         return len(self.data_source)
 
-    def onehot_encode(self, df):
-        if "label" in df:
-            df = df.drop("label", axis=1)
-        cat_col = df.dtypes[df.dtypes == 'category'].index.tolist()
-        for col in cat_col:
-            df = self.encode_and_bind(df, col)
+    def fit_pca(self):
+        X = self.data_source
+        i = random.randint(0, self.n - 1)
+        X_ = self.pca.fit_transform(X)[:, i].reshape(-1)
+
+    def onehot_encode(self, basedataset):
+        df = []
+        if hasattr(basedataset, "categorical_0"):
+            for col in basedataset.categorical_0:
+                jobs_encoder = OneHotEncoder(sparse=False)
+                transformed = jobs_encoder.fit_transform(basedataset.categorical_0[col].reshape(-1, 1))
+                ohe_df = pd.DataFrame(transformed)
+                self.encoders[col] = jobs_encoder
+                df.append(ohe_df)
+        if hasattr(basedataset, "numerical_0"):
+            df.append(pd.DataFrame.from_dict(basedataset.numerical_0))
+        df = pd.concat(df, axis=1)
+        return df
+
+    def apply_onehot_encode(self, basedataset):
+        df = []
+        if hasattr(basedataset, "categorical_0"):
+            for col in basedataset.categorical_0:
+                jobs_encoder = self.encoders[col]
+                transformed = jobs_encoder.transform(basedataset.categorical_0[col].reshape(-1, 1))
+                ohe_df = pd.DataFrame(transformed)
+                df.append(ohe_df)
+        if hasattr(basedataset, "numerical_0"):
+            df.append(pd.DataFrame.from_dict(basedataset.numerical_0))
+        df = pd.concat(df, axis=1)
         return df
 
     def encode_and_bind(self, original_dataframe, feature_to_encode):
@@ -42,13 +74,54 @@ class KnnSampler(Sampler):
         res = res.drop([feature_to_encode], axis=1)
         return res
 
-    def get_even_clusters(self, n=10):
+    def get_even_clusters(self):
         X = self.data_source
-        pca = PCA(n_components=n)
-        i = random.randint(0, n-1)
-        X_ = pca.fit_transform(X)[:, i].reshape(-1)
+        i = random.randint(0, self.n-1)
+        X_ = self.pca.fit_transform(X)[:, i].reshape(-1)
         ind = np.argsort(X_, axis=0)
         return ind
+
+    def transform(self, data):
+        raw_data = data
+        data = self.apply_onehot_encode(data)
+        pc_val, pc_tr = self.pca.transform(data), self.pca.transform(self.data_source)
+        idx_all = []
+        for index in range(data.shape[0]):
+            distance = abs(pc_tr-pc_val[index]).reshape(-1)
+            idx = np.argpartition(distance, self.batch_size-1)
+            idx_all.append(idx[:self.batch_size-1])
+        data_with_support = copy.deepcopy(raw_data)
+        length = []
+        if hasattr(data_with_support, "categorical_0"):
+            for col in data_with_support.categorical_0:
+                supported_col = []
+                for i, idx in enumerate(idx_all):
+                    supported_col.append(raw_data.categorical_0[col][i:i+1])
+                    supported_col.append(self.raw_data_source.categorical_0[col][idx])
+                data_with_support.categorical_0[col] = np.concatenate(supported_col, axis=0)
+            length.append(len(np.concatenate(supported_col, axis=0)))
+
+        if hasattr(data_with_support, "numerical_0"):
+            for col in data_with_support.numerical_0:
+                supported_col = []
+                for i, idx in enumerate(idx_all):
+                    supported_col.append(raw_data.numerical_0[col][i:i+1])
+                    supported_col.append(self.raw_data_source.numerical_0[col][idx])
+                data_with_support.numerical_0[col] = np.concatenate(supported_col, axis=0)
+            length.append(len(np.concatenate(supported_col, axis=0)))
+
+        if hasattr(data_with_support, "label_0"):
+            for col in data_with_support.label_0:
+                supported_col = []
+                for i, idx in enumerate(idx_all):
+                    supported_col.append(raw_data.label_0[col][i:i + 1])
+                    supported_col.append(self.raw_data_source.label_0[col][idx])
+                data_with_support.label_0[col] = np.concatenate(supported_col, axis=0)
+            length.append(len(np.concatenate(supported_col, axis=0)))
+
+        data_with_support.lengths = [i * self.batch_size for i in data_with_support.lengths]
+
+        return data_with_support
 
 
 class KnnDataModule(LightningDataModule):
@@ -158,7 +231,8 @@ class KnnDataModule(LightningDataModule):
         -------
         A Pytorch DataLoader object.
         """
-        self.train_sampler = KnnSampler(self.train_data, batch_size=self.per_gpu_batch_size)
+        print("start train")
+        self.train_sampler = KnnSampler(self.train_dataset, batch_size=self.per_gpu_batch_size)
         loader = DataLoader(
             self.train_dataset,
             sampler=self.train_sampler,
@@ -179,10 +253,10 @@ class KnnDataModule(LightningDataModule):
         -------
         A Pytorch DataLoader object.
         """
-        self.val_sampler = KnnSampler(self.val_data, batch_size=self.per_gpu_batch_size)
+        print("start val")
+        val_dataset = self.train_sampler.transform(self.val_dataset)
         loader = DataLoader(
-            self.val_dataset,
-            sampler=self.val_sampler,
+            val_dataset,
             batch_size=self.per_gpu_batch_size,
             num_workers=self.num_workers,
             pin_memory=False,
@@ -200,10 +274,10 @@ class KnnDataModule(LightningDataModule):
         -------
         A Pytorch DataLoader object.
         """
-        self.test_sampler = KnnSampler(self.test_data, batch_size=self.per_gpu_batch_size)
+        print("start test")
+        test_dataset = self.train_sampler.transform(self.test_dataset)
         loader = DataLoader(
-            self.test_dataset,
-            sampler=self.test_sampler,
+            test_dataset,
             batch_size=self.per_gpu_batch_size,
             num_workers=self.num_workers,
             pin_memory=False,
@@ -221,10 +295,10 @@ class KnnDataModule(LightningDataModule):
         -------
         A Pytorch DataLoader object.
         """
-        self.predict_sampler = KnnSampler(self.predict_data, batch_size=self.per_gpu_batch_size)
+        print("start pred")
+        predict_dataset = self.train_sampler.transform(self.predict_dataset)
         loader = DataLoader(
-            self.predict_dataset,
-            sampler=self.predict_sampler,
+            predict_dataset,
             batch_size=self.per_gpu_batch_size,
             num_workers=self.num_workers,
             pin_memory=False,
