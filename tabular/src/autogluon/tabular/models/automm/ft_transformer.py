@@ -65,5 +65,5 @@ class FTTransformerModel(MultiModalPredictorModel):
     def get_minimum_resources(self) -> Dict[str, int]:
         return {
             'num_cpus': 1,
-            'num_gpus': 1,
+            'num_gpus': 0,
         }
