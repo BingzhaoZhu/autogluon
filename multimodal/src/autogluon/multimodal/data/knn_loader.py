@@ -91,7 +91,6 @@ class KnnSampler(Sampler):
             idx = np.argpartition(distance, self.batch_size-1)
             idx_all.append(idx[:self.batch_size-1])
         data_with_support = copy.deepcopy(raw_data)
-        length = []
         if hasattr(data_with_support, "categorical_0"):
             for col in data_with_support.categorical_0:
                 supported_col = []
@@ -99,7 +98,6 @@ class KnnSampler(Sampler):
                     supported_col.append(raw_data.categorical_0[col][i:i+1])
                     supported_col.append(self.raw_data_source.categorical_0[col][idx])
                 data_with_support.categorical_0[col] = np.concatenate(supported_col, axis=0)
-            length.append(len(np.concatenate(supported_col, axis=0)))
 
         if hasattr(data_with_support, "numerical_0"):
             for col in data_with_support.numerical_0:
@@ -108,7 +106,6 @@ class KnnSampler(Sampler):
                     supported_col.append(raw_data.numerical_0[col][i:i+1])
                     supported_col.append(self.raw_data_source.numerical_0[col][idx])
                 data_with_support.numerical_0[col] = np.concatenate(supported_col, axis=0)
-            length.append(len(np.concatenate(supported_col, axis=0)))
 
         if hasattr(data_with_support, "label_0"):
             for col in data_with_support.label_0:
@@ -117,7 +114,6 @@ class KnnSampler(Sampler):
                     supported_col.append(raw_data.label_0[col][i:i + 1])
                     supported_col.append(self.raw_data_source.label_0[col][idx])
                 data_with_support.label_0[col] = np.concatenate(supported_col, axis=0)
-            length.append(len(np.concatenate(supported_col, axis=0)))
 
         data_with_support.lengths = [i * self.batch_size for i in data_with_support.lengths]
 
@@ -231,7 +227,6 @@ class KnnDataModule(LightningDataModule):
         -------
         A Pytorch DataLoader object.
         """
-        print("start train")
         self.train_sampler = KnnSampler(self.train_dataset, batch_size=self.per_gpu_batch_size)
         loader = DataLoader(
             self.train_dataset,
@@ -253,7 +248,6 @@ class KnnDataModule(LightningDataModule):
         -------
         A Pytorch DataLoader object.
         """
-        print("start val")
         val_dataset = self.train_sampler.transform(self.val_dataset)
         loader = DataLoader(
             val_dataset,
@@ -274,7 +268,6 @@ class KnnDataModule(LightningDataModule):
         -------
         A Pytorch DataLoader object.
         """
-        print("start test")
         test_dataset = self.train_sampler.transform(self.test_dataset)
         loader = DataLoader(
             test_dataset,
@@ -295,7 +288,6 @@ class KnnDataModule(LightningDataModule):
         -------
         A Pytorch DataLoader object.
         """
-        print("start pred")
         predict_dataset = self.train_sampler.transform(self.predict_dataset)
         loader = DataLoader(
             predict_dataset,
