@@ -29,6 +29,7 @@ class KnnSampler(Sampler):
         self.perm = self.get_even_clusters()
 
     def __iter__(self):
+        self.perm = self.get_even_clusters()
         for batch_ in self.perm:
             yield batch_
 
@@ -181,9 +182,9 @@ class KnnDataModule(LightningDataModule):
         self.test_data = test_data
         self.predict_data = predict_data
 
-        if train_data is not None:
-            self.set_dataset(TRAIN)
-            self.train_sampler = KnnSampler(self.train_dataset, batch_size=self.per_gpu_batch_size)
+        # if self.train_data is not None:
+        #     self.set_dataset(TRAIN)
+        #     self.train_sampler = KnnSampler(self.train_dataset, batch_size=self.per_gpu_batch_size)
 
     def set_dataset(self, split):
         data_split = getattr(self, f"{split}_data")
@@ -194,6 +195,7 @@ class KnnDataModule(LightningDataModule):
             is_training=split == TRAIN,
         )
         setattr(self, f"{split}_dataset", dataset)
+
 
     def setup(self, stage):
         """
@@ -229,6 +231,7 @@ class KnnDataModule(LightningDataModule):
         -------
         A Pytorch DataLoader object.
         """
+        self.train_sampler = KnnSampler(self.train_dataset, batch_size=self.per_gpu_batch_size, n=10)
         loader = DataLoader(
             self.train_dataset,
             sampler=self.train_sampler,
@@ -249,9 +252,11 @@ class KnnDataModule(LightningDataModule):
         -------
         A Pytorch DataLoader object.
         """
-        val_dataset = self.train_sampler.transform(self.val_dataset)
+        self.val_sampler = KnnSampler(self.val_dataset, batch_size=self.per_gpu_batch_size)
+        val_dataset = self.val_dataset
         loader = DataLoader(
             val_dataset,
+            sampler=self.val_sampler,
             batch_size=self.per_gpu_batch_size,
             num_workers=self.num_workers,
             pin_memory=False,
@@ -269,9 +274,11 @@ class KnnDataModule(LightningDataModule):
         -------
         A Pytorch DataLoader object.
         """
-        test_dataset = self.train_sampler.transform(self.test_dataset)
+        self.test_sampler = KnnSampler(self.test_dataset, batch_size=self.per_gpu_batch_size)
+        test_dataset = self.test_dataset
         loader = DataLoader(
             test_dataset,
+            sampler=self.test_sampler,
             batch_size=self.per_gpu_batch_size,
             num_workers=self.num_workers,
             pin_memory=False,
@@ -289,9 +296,11 @@ class KnnDataModule(LightningDataModule):
         -------
         A Pytorch DataLoader object.
         """
-        predict_dataset = self.train_sampler.transform(self.predict_dataset)
+        self.predict_sampler = KnnSampler(self.predict_dataset, batch_size=self.per_gpu_batch_size)
+        predict_dataset = self.predict_dataset
         loader = DataLoader(
             predict_dataset,
+            sampler=self.predict_sampler,
             batch_size=self.per_gpu_batch_size,
             num_workers=self.num_workers,
             pin_memory=False,

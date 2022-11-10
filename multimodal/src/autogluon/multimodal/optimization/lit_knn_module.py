@@ -16,7 +16,7 @@ from .utils import apply_layerwise_lr_decay, apply_single_lr, apply_two_stages_l
 logger = logging.getLogger(AUTOMM)
 
 
-class LitModule(pl.LightningModule):
+class KnnLitModule(pl.LightningModule):
     """
     Control the loops for training, evaluation, and prediction. This module is independent of
     the model definition. This class inherits from the Pytorch Lightning's LightningModule:
@@ -121,6 +121,7 @@ class LitModule(pl.LightningModule):
                 "which must be used with a customized metric function."
             )
         self.custom_metric_func = custom_metric_func
+        self.set_row_gradient(False)
 
     def _compute_template_loss(
         self,
@@ -204,6 +205,17 @@ class LitModule(pl.LightningModule):
         loss = self._compute_loss(output=output, label=label)
         return output, loss
 
+    def set_row_gradient(self, enable_grad):
+        self.row_gradient = enable_grad
+        if hasattr(self.model.fusion_transformer, "row_attention_layers"):
+            row_attention_parameters = self.model.fusion_transformer.row_attention_layers.parameters()
+            for module in self.model.modules():
+                for param in module.parameters():
+                    param.requires_grad = not enable_grad
+            for param in row_attention_parameters:
+                param.requires_grad = enable_grad
+
+
     def training_step(self, batch, batch_idx):
         """
         Per training step. This function is registered by pl.LightningModule.
@@ -223,12 +235,16 @@ class LitModule(pl.LightningModule):
         -------
         Average loss of the mini-batch data.
         """
+        # if self.row_gradient:
+        #     self.model.eval()
+        # else:
+        #     self.model.train()
         output, loss = self._shared_step(batch)
 
         # if hasattr(self.model.fusion_transformer, "row_attention_layers"):
         #     row_attention_parameters = self.model.fusion_transformer.row_attention_layers.parameters()
         #     reg = 0
-        #     for p in self.model.parameters(): #row_attention_parameters:
+        #     for p in row_attention_parameters:
         #         reg += torch.norm(p, 2)
         #     print(reg)
         self.log("train_loss", loss)

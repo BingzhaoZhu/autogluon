@@ -67,7 +67,7 @@ from .constants import (
     ZERO_SHOT_IMAGE_CLASSIFICATION,
 )
 from .data.datamodule import BaseDataModule
-from .data.knn_loader import KnnDataModule
+from .data.knn_loader2 import KnnDataModule
 from .data.infer_types import (
     infer_column_types,
     infer_label_column_type_by_problem_type,
@@ -77,6 +77,7 @@ from .optimization.lit_distiller import DistillerLitModule
 from .optimization.lit_matcher import MatcherLitModule
 from .optimization.lit_softpretrainer import SoftLitModule
 from .optimization.lit_module import LitModule
+from .optimization.lit_knn_module import KnnLitModule
 from .optimization.losses import RKDLoss
 from .optimization.utils import get_loss_func, get_metric
 from .utils import (
@@ -994,6 +995,18 @@ class MultiModalPredictor:
             train_data=train_df,
             val_data=val_df,
         )
+
+        if self.knn_dataloader:
+            knn_dm = KnnDataModule(
+                df_preprocessor=df_preprocessor,
+                data_processors=data_processors,
+                per_gpu_batch_size=config.env.per_gpu_batch_size,
+                num_workers=config.env.num_workers,
+                train_data=train_df,
+                val_data=val_df,
+            )
+            # pickle.dump(knn_dm.train_sampler, open("sampler.pkl", 'wb'))
+
         optimization_kwargs = dict(
             optim_type=config.optimization.optim_type,
             lr_choice=config.optimization.lr_choice,
@@ -1067,6 +1080,17 @@ class MultiModalPredictor:
                     **metrics_kwargs,
                     **optimization_kwargs,
                 )
+        elif self.knn_dataloader:
+            task = KnnLitModule(
+                model=model,
+                loss_func=loss_func,
+                efficient_finetune=OmegaConf.select(config, "optimization.efficient_finetune"),
+                mixup_fn=mixup_fn,
+                mixup_off_epoch=OmegaConf.select(config, "data.mixup.turn_off_epoch"),
+                trainable_param_names=OmegaConf.select(config, "optimization.trainable_param_names", default=None),
+                **metrics_kwargs,
+                **optimization_kwargs,
+            )
         else:
             task = LitModule(
                 model=model,
@@ -1228,56 +1252,6 @@ class MultiModalPredictor:
                 ckpt_path=ckpt_path if resume else None,  # this is to resume training that was broken accidentally
             )
 
-            if self.knn_dataloader:
-                train_dm = KnnDataModule(
-                    df_preprocessor=df_preprocessor,
-                    data_processors=data_processors,
-                    per_gpu_batch_size=config.env.per_gpu_batch_size,
-                    num_workers=config.env.num_workers,
-                    train_data=train_df,
-                    val_data=val_df,
-                )
-                task.set_row_gradient(True)
-
-                with apply_log_filter(log_filter):
-                    trainer = pl.Trainer(
-                        gpus=num_gpus if not use_ray_lightning else None,  # ray lightning requires not specifying gpus
-                        auto_select_gpus=config.env.auto_select_gpus if num_gpus != 0 else False,
-                        num_nodes=config.env.num_nodes,
-                        precision=precision,
-                        strategy=strategy,
-                        benchmark=False,
-                        deterministic=config.env.deterministic,
-                        max_epochs=config.optimization.max_epochs,
-                        max_steps=config.optimization.max_steps,
-                        max_time=max_time,
-                        callbacks=callbacks_,
-                        logger=tb_logger,
-                        gradient_clip_val=OmegaConf.select(config, "optimization.gradient_clip_val", default=1),
-                        gradient_clip_algorithm=OmegaConf.select(
-                            config, "optimization.gradient_clip_algorithm", default="norm"
-                        ),
-                        accumulate_grad_batches=grad_steps,
-                        log_every_n_steps=OmegaConf.select(config, "optimization.log_every_n_steps", default=10),
-                        enable_progress_bar=enable_progress_bar,
-                        fast_dev_run=config.env.fast_dev_run,
-                        track_grad_norm=OmegaConf.select(config, "optimization.track_grad_norm", default=-1),
-                        val_check_interval=config.optimization.val_check_interval,
-                        check_val_every_n_epoch=config.optimization.check_val_every_n_epoch
-                        if hasattr(config.optimization, "check_val_every_n_epoch")
-                        else 1,
-                        reload_dataloaders_every_n_epochs=1,
-                    )
-
-                trainer.fit(
-                    task,
-                    datamodule=train_dm,
-                    ckpt_path=ckpt_path if resume else None,  # this is to resume training that was broken accidentally
-                )
-
-                pickle.dump(train_dm.train_sampler, open("sampler.pkl", 'wb'))
-
-
         if trainer.global_rank == 0:
             # We do not perform averaging checkpoint in the case of hpo for each trial
             # We only averaging the checkpoint of the best trial in the end in the master process
@@ -1293,6 +1267,58 @@ class MultiModalPredictor:
                 )
         else:
             sys.exit(f"Training finished, exit the process with global_rank={trainer.global_rank}...")
+
+        # if self.knn_dataloader:
+        #     with apply_log_filter(log_filter):
+        #         trainer = pl.Trainer(
+        #             gpus=num_gpus if not use_ray_lightning else None,  # ray lightning requires not specifying gpus
+        #             auto_select_gpus=config.env.auto_select_gpus if num_gpus != 0 else False,
+        #             num_nodes=config.env.num_nodes,
+        #             precision=precision,
+        #             strategy=strategy,
+        #             benchmark=False,
+        #             deterministic=config.env.deterministic,
+        #             max_epochs=config.optimization.max_epochs,
+        #             max_steps=config.optimization.max_steps,
+        #             max_time=max_time,
+        #             callbacks=callbacks_,
+        #             logger=tb_logger,
+        #             gradient_clip_val=OmegaConf.select(config, "optimization.gradient_clip_val", default=1),
+        #             gradient_clip_algorithm=OmegaConf.select(
+        #                 config, "optimization.gradient_clip_algorithm", default="norm"
+        #             ),
+        #             accumulate_grad_batches=grad_steps,
+        #             log_every_n_steps=OmegaConf.select(config, "optimization.log_every_n_steps", default=10),
+        #             enable_progress_bar=enable_progress_bar,
+        #             fast_dev_run=config.env.fast_dev_run,
+        #             track_grad_norm=OmegaConf.select(config, "optimization.track_grad_norm", default=-1),
+        #             val_check_interval=config.optimization.val_check_interval,
+        #             check_val_every_n_epoch=config.optimization.check_val_every_n_epoch
+        #             if hasattr(config.optimization, "check_val_every_n_epoch")
+        #             else 1,
+        #             reload_dataloaders_every_n_epochs=1,
+        #         )
+        #     task.set_row_gradient(True)
+        #     trainer.fit(
+        #         task,
+        #         datamodule=train_dm,
+        #         ckpt_path=ckpt_path if resume else None,  # this is to resume training that was broken accidentally
+        #     )
+        #     if trainer.global_rank == 0:
+        #         # We do not perform averaging checkpoint in the case of hpo for each trial
+        #         # We only averaging the checkpoint of the best trial in the end in the master process
+        #         if not hpo_mode:
+        #             self._top_k_average(
+        #                 model=model,
+        #                 save_path=save_path,
+        #                 minmax_mode=minmax_mode,
+        #                 is_distill=is_distill,
+        #                 top_k_average_method=config.optimization.top_k_average_method,
+        #                 val_df=val_df,
+        #                 validation_metric_name=validation_metric_name,
+        #             )
+        #     else:
+        #         sys.exit(f"Training finished, exit the process with global_rank={trainer.global_rank}...")
 
     def _top_k_average(
         self,
@@ -1492,7 +1518,7 @@ class MultiModalPredictor:
             num_workers=self._config.env.num_workers_evaluation,
             predict_data=data,
         )
-        predict_dm.train_sampler = pickle.load(open("sampler.pkl", 'rb'))
+        # predict_dm.train_sampler = pickle.load(open("sampler.pkl", 'rb'))
 
         if hasattr(self._config, MATCHER):
             match_label = self._df_preprocessor.label_generator.transform([self._config.matcher.match_label]).item()
@@ -1543,13 +1569,13 @@ class MultiModalPredictor:
                     datamodule=predict_dm,
                 )
 
-        # if hasattr(predict_dm, "predict_sampler") and hasattr(predict_dm.predict_sampler, "perm"):
-        #     self.perm_knn = predict_dm.predict_sampler.perm
+        if hasattr(predict_dm, "predict_sampler") and hasattr(predict_dm.predict_sampler, "perm"):
+            self.perm_knn = predict_dm.predict_sampler.perm
 
-        #if support_data is not None:
-        for batch in outputs:
-            for key in batch:
-                batch[key] = batch[key][0:1]
+        if support_data is not None:
+            for batch in outputs:
+                for key in batch:
+                    batch[key] = batch[key][0:1]
 
         return outputs
 
@@ -1826,9 +1852,9 @@ class MultiModalPredictor:
                 else:
                     pred = logits_or_prob
 
-        # if hasattr(self, "perm_knn"):
-        #     inverse_perm = np.argsort(self.perm_knn)
-        #     pred = pred[inverse_perm]
+        if hasattr(self, "perm_knn"):
+            inverse_perm = np.argsort(self.perm_knn)
+            pred = pred[inverse_perm]
 
         # unshuffle prediction
         inverse_perm = np.argsort(perm)
@@ -1905,9 +1931,9 @@ class MultiModalPredictor:
             else:
                 prob = logits_or_prob
 
-        # if hasattr(self, "perm_knn"):
-        #     inverse_perm = np.argsort(self.perm_knn)
-        #     prob = prob[inverse_perm]
+        if hasattr(self, "perm_knn"):
+            inverse_perm = np.argsort(self.perm_knn)
+            prob = prob[inverse_perm]
         # unshuffle prediction
         inverse_perm = np.argsort(perm)
         prob = prob[inverse_perm]
