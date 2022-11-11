@@ -1,6 +1,7 @@
 import logging
 import re
 import time
+import warnings
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -19,12 +20,17 @@ logger = logging.getLogger(__name__)
 
 
 class AutoGluonTabularModel(AbstractTimeSeriesModel):
-    """Uses TabularPredictor to forecast future time series values one step at a time.
+    """Predict future time series values using autogluon.tabular.TabularPredictor.
 
     The forecasting is converted to a tabular problem using the following features:
 
     - lag features (observed time series values) based on ``freq`` of the data
     - time features (e.g., day of the week) based on the timestamp of the measurement
+    - static features of each item (if available)
+
+    Quantiles are obtained by assuming that the residuals follow zero-mean normal distribution, scale of which is
+    estimated from the empirical distribution of the residuals.
+
 
     Other Parameters
     ----------------
@@ -179,13 +185,15 @@ class AutoGluonTabularModel(AbstractTimeSeriesModel):
         time_elapsed = time.time() - start_time
         autogluon_logger = logging.getLogger("autogluon")
         logging_level = autogluon_logger.level
-        self.tabular_predictor.fit(
-            train_data=train_df,
-            tuning_data=val_df,
-            time_limit=time_limit - time_elapsed if time_limit else None,
-            hyperparameters=tabular_hyperparameters,
-            verbosity=verbosity - 2,
-        )
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            self.tabular_predictor.fit(
+                train_data=train_df,
+                tuning_data=val_df,
+                time_limit=time_limit - time_elapsed if time_limit else None,
+                hyperparameters=tabular_hyperparameters,
+                verbosity=verbosity - 2,
+            )
         residuals = (self.tabular_predictor.predict(train_df) - train_df[self.target]).values
         self.residuals_std = np.sqrt(np.mean(np.square(residuals)))
         # Logger level is changed inside .fit(), restore to the initial value

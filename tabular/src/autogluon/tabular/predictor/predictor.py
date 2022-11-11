@@ -3127,9 +3127,6 @@ class TabularPredictor:
             # private
             _save_bag_folds=None,
 
-            # quantile levels
-            quantile_levels=None,
-
             calibrate='auto',
 
             # pseudo label
@@ -3149,7 +3146,7 @@ class TabularPredictor:
                 public_kwarg_options = [kwarg for kwarg in allowed_kwarg_names if kwarg[0] != '_']
                 public_kwarg_options.sort()
                 raise ValueError(
-                    f"Unknown keyword argument specified: {kwarg_name}\nValid kwargs: {public_kwarg_options}")
+                    f"Unknown `.fit` keyword argument specified: '{kwarg_name}'\nValid kwargs: {public_kwarg_options}")
 
         kwargs_sanitized = fit_extra_kwargs_default.copy()
         kwargs_sanitized.update(kwargs)
@@ -3227,6 +3224,17 @@ class TabularPredictor:
             tuning_features = np.array(tuning_features)
             if np.any(train_features != tuning_features):
                 raise ValueError("Column names must match between training and tuning data")
+
+            if self.label in tuning_data:
+                train_label_type = train_data[self.label].dtype
+                tuning_label_type = tuning_data[self.label].dtype
+
+                if train_label_type != tuning_label_type:
+                    logger.warning(f'WARNING: train_data and tuning_data have mismatched label column dtypes! '
+                                   f'train_label_type={train_label_type}, tuning_data_type={tuning_label_type}.\n'
+                                   f'\tYou should ensure the dtypes match to avoid bugs or instability.\n'
+                                   f'\tAutoGluon will attempt to convert the dtypes to align.')
+
         if unlabeled_data is not None:
             if not isinstance(unlabeled_data, pd.DataFrame):
                 raise AssertionError(
