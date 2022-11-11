@@ -119,8 +119,8 @@ class AbstractTabularLearner(AbstractLearner):
         return self.label_cleaner.cat_mappings_dependent_var[1]
 
     def fit(self, X: DataFrame, X_val: DataFrame = None, **kwargs):
-        if self.is_fit:
-            raise AssertionError('Learner is already fit.')
+        # if self.is_fit:
+        #     raise AssertionError('Learner is already fit.')
         self._validate_fit_input(X=X, X_val=X_val, **kwargs)
         return self._fit(X=X, X_val=X_val, **kwargs)
 

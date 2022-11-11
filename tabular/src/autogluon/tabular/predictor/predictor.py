@@ -731,9 +731,9 @@ class TabularPredictor:
         >>> time_limit = 3600  # set as long as you are willing to wait (in sec)
         >>> predictor = TabularPredictor(label=label, eval_metric=eval_metric).fit(train_data, presets=['best_quality'], time_limit=time_limit)
         """
-        if self._learner.is_fit:
-            raise AssertionError(
-                'Predictor is already fit! To fit additional models, refer to `predictor.fit_extra`, or create a new `Predictor`.')
+        # if self._learner.is_fit:
+        #     raise AssertionError(
+        #         'Predictor is already fit! To fit additional models, refer to `predictor.fit_extra`, or create a new `Predictor`.')
         kwargs_orig = kwargs.copy()
         kwargs = self._validate_fit_kwargs(kwargs)
 
@@ -862,7 +862,7 @@ class TabularPredictor:
                           num_stack_levels=num_stack_levels,
                           hyperparameters=hyperparameters, core_kwargs=core_kwargs, aux_kwargs=aux_kwargs,
                           time_limit=time_limit, infer_limit=infer_limit, infer_limit_batch_size=infer_limit_batch_size,
-                          verbosity=verbosity, use_bag_holdout=use_bag_holdout)
+                          verbosity=verbosity, use_bag_holdout=use_bag_holdout, is_pretrain=kwargs["is_pretrain"])
         self._set_post_fit_vars()
 
         self._post_fit(
@@ -3079,6 +3079,7 @@ class TabularPredictor:
             feature_generator='auto',
             unlabeled_data=None,
             _feature_generator_kwargs=None,
+            is_pretrain=False,
         )
 
         kwargs = self._validate_fit_extra_kwargs(kwargs, extra_valid_keys=list(fit_kwargs_default.keys()))

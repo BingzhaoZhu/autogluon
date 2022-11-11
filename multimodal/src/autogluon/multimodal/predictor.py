@@ -427,6 +427,7 @@ class MultiModalPredictor:
         seed: Optional[int] = 123,
         standalone: Optional[bool] = True,
         hyperparameter_tune_kwargs: Optional[dict] = None,
+        is_pretrain: Optional[bool] = False,
     ):
         """
         Fit MultiModalPredictor predict label column of a dataframe based on the other columns,
@@ -714,6 +715,7 @@ class MultiModalPredictor:
             teacher_predictor=teacher_predictor,
             standalone=standalone,
             hpo_mode=(hyperparameter_tune_kwargs is not None),  # skip average checkpoint if in hpo mode
+            is_pretrain=is_pretrain,
         )
 
         if hyperparameter_tune_kwargs is not None:
@@ -974,7 +976,29 @@ class MultiModalPredictor:
             teacher_predictor._data_processors,
         )
 
-    def _fit(
+    def _prefit(
+        self,
+        train_df_list: List[pd.DataFrame],
+        val_df_list: List[pd.DataFrame],
+        validation_metric_name: str,
+        minmax_mode: str,
+        max_time: timedelta,
+        save_path: str,
+        ckpt_path: str,
+        resume: bool,
+        enable_progress_bar: bool,
+        presets: Optional[str] = None,
+        config: Optional[dict] = None,
+        hyperparameters: Optional[Union[str, Dict, List[str]]] = None,
+        teacher_predictor: Union[str, MultiModalPredictor] = None,
+        hpo_mode: bool = False,
+        standalone: bool = True,
+        **hpo_kwargs,
+    ):
+
+        return
+
+    def _prefit_one(
         self,
         train_df: pd.DataFrame,
         val_df: pd.DataFrame,
@@ -993,6 +1017,30 @@ class MultiModalPredictor:
         standalone: bool = True,
         **hpo_kwargs,
     ):
+
+        return
+
+    def _fit(
+        self,
+        train_df: pd.DataFrame,
+        val_df: pd.DataFrame,
+        validation_metric_name: str,
+        minmax_mode: str,
+        max_time: timedelta,
+        save_path: str,
+        ckpt_path: str,
+        resume: bool,
+        enable_progress_bar: bool,
+        presets: Optional[str] = None,
+        config: Optional[dict] = None,
+        hyperparameters: Optional[Union[str, Dict, List[str]]] = None,
+        teacher_predictor: Union[str, MultiModalPredictor] = None,
+        hpo_mode: bool = False,
+        standalone: bool = True,
+        is_pretrain: bool = False,
+        **hpo_kwargs,
+    ):
+        print("----------fitting---------------", is_pretrain)
         if self._config is not None:  # continuous training
             config = self._config
 
