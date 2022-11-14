@@ -1218,7 +1218,7 @@ class MultiModalPredictor:
             model = self._model
 
         pretrain_path = os.path.join("./", "pretrained_backbone.ckpt")
-        if os.path.isfile(pretrain_path):
+        if is_pretrain and os.path.isfile(pretrain_path):
             model.fusion_transformer = self._load_state_dict(
                 model=model.fusion_transformer,
                 path=pretrain_path,
