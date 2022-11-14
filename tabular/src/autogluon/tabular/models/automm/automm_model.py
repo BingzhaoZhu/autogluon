@@ -149,7 +149,7 @@ class MultiModalPredictorModel(AbstractModel):
         root_log_level = root_logger.level
         self.model = MultiModalPredictor(label=self._label_column_name,
                                      problem_type=self.problem_type,
-                                     path=self.path,
+                                     path=os.path.join(self.path, self._NN_MODEL_NAME), #self.path,
                                      eval_metric=self.eval_metric,
                                      verbosity=verbosity_text)
         params = self._get_model_params()

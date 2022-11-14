@@ -1170,6 +1170,7 @@ class MultiModalPredictor:
         **hpo_kwargs,
     ):
         print("----------fitting---------------", is_pretrain)
+
         if self._config is not None:  # continuous training
             config = self._config
 
@@ -1215,6 +1216,13 @@ class MultiModalPredictor:
             )
         else:  # continuing training
             model = self._model
+
+        pretrain_path = os.path.join("./", "pretrained_backbone.ckpt")
+        if os.path.isfile(pretrain_path):
+            model.fusion_transformer = self._load_state_dict(
+                model=model.fusion_transformer,
+                path=pretrain_path,
+            )
 
         norm_param_names = get_norm_layer_param_names(model)
 
@@ -1725,6 +1733,11 @@ class MultiModalPredictor:
         # clean the last checkpoint
         if os.path.isfile(last_ckpt_path):
             os.remove(last_ckpt_path)
+
+        checkpoint = {
+            "state_dict": {"model." + name: param for name, param in self._model.fusion_transformer.state_dict().items()}
+        }
+        torch.save(checkpoint, os.path.join("./", "pretrained_backbone.ckpt"))
 
     def _default_predict(
         self,
@@ -2721,6 +2734,18 @@ class MultiModalPredictor:
                 # FIXME(?) Fix the saving logic
                 RuntimeError(
                     f"Cannot find the model checkpoint in '{model_path}'. Have you removed the folder that "
+                    f"is created in .fit()? Currently, .save() won't function appropriately if that folder is "
+                    f"removed."
+                )
+
+        if os.path.abspath(path) != os.path.abspath(self._save_path):
+            model_path = os.path.join(self._save_path, "last.ckpt")
+            if os.path.isfile(model_path):
+                shutil.copy(model_path, path)
+            else:
+                # FIXME(?) Fix the saving logic
+                RuntimeError(
+                    f"Cannot find the last checkpoint in '{model_path}'. Have you removed the folder that "
                     f"is created in .fit()? Currently, .save() won't function appropriately if that folder is "
                     f"removed."
                 )

@@ -98,20 +98,22 @@ def process_save_path(path, resume: Optional[bool] = False, raise_if_exist: Opti
     A complete and verified path or None.
     """
     path = os.path.abspath(os.path.expanduser(path))
-    if resume:
+    if resume or os.path.isdir(path):
         assert os.path.isfile(os.path.join(path, LAST_CHECKPOINT)), (
             f"Trying to resume training from '{path}'. "
             f"However, it does not contain the last checkpoint file: '{LAST_CHECKPOINT}'. "
             "Are you using a correct path?"
         )
-    elif os.path.isdir(path):
-        if raise_if_exist:
-            raise ValueError(
-                f"Path {path} already exists."
-                "Specify a new path to avoid accidentally overwriting a saved predictor."
-            )
-        else:
-            path = None
+    # elif os.path.isdir(path):
+    #     if raise_if_exist:
+    #         # raise ValueError(
+    #         #     f"Path {path} already exists."
+    #         #     "Specify a new path to avoid accidentally overwriting a saved predictor."
+    #         # )
+    #     else:
+    #         path = None
+    else:
+        path = None
 
     return path
 
