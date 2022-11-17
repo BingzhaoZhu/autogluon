@@ -1220,6 +1220,7 @@ class MultiModalPredictor:
 
         pretrain_path = os.path.join("./", "pretrained_backbone.ckpt")
         if is_pretrain["is_pretrain"] and os.path.isfile(pretrain_path):
+            print("loading pretrained backbone...")
             model.fusion_transformer = self._load_state_dict(
                 model=model.fusion_transformer,
                 path=pretrain_path,
@@ -1229,10 +1230,12 @@ class MultiModalPredictor:
             selected = []
             all_pretrain_tasks = []
             for dsid in is_pretrain["get_loader"]:
-                filename = "./loaders"+str(dsid)+".sav"
+                filename = "./loaders/"+str(dsid)+".sav"
                 if os.path.exists(filename):
                     selected.append(dsid)
-                    all_pretrain_tasks.append(pickle.load(open(filename, 'rb')))
+                    per_pretrain_task = pickle.load(open(filename, 'rb'))
+                    per_pretrain_task["model"].fusion_transformer = model.fusion_transformer
+                    all_pretrain_tasks.append(per_pretrain_task)
             is_pretrain["get_loader"] = selected
 
         norm_param_names = get_norm_layer_param_names(model)
@@ -1434,6 +1437,7 @@ class MultiModalPredictor:
                     mixup_off_epoch=OmegaConf.select(config, "data.mixup.turn_off_epoch"),
                     model_postprocess_fn=model_postprocess_fn,
                     trainable_param_names=trainable_param_names,
+                    all_pretrain_tasks=all_pretrain_tasks,
                     **metrics_kwargs,
                     **optimization_kwargs,
                 )
@@ -1568,7 +1572,7 @@ class MultiModalPredictor:
                 max_epochs=config.optimization.max_epochs,
                 max_steps=config.optimization.max_steps,
                 max_time=max_time,
-                callbacks=callbacks,
+                callbacks=None if "get_loader" in is_pretrain else callbacks,
                 logger=tb_logger,
                 gradient_clip_val=OmegaConf.select(config, "optimization.gradient_clip_val", default=1),
                 gradient_clip_algorithm=OmegaConf.select(
@@ -1591,7 +1595,9 @@ class MultiModalPredictor:
         if "set_loader" in is_pretrain:
             task_id = is_pretrain["set_loader"]
             filename = f'./loaders/{task_id}.sav'
+            model.fusion_transformer = None
             saver = {
+                "model": model,
                 "data_module": train_dm,
                 "metrics": metrics_kwargs,
                 "loss_func": loss_func,
@@ -1613,6 +1619,7 @@ class MultiModalPredictor:
                 datamodule=train_dm,
                 ckpt_path=ckpt_path if resume else None,  # this is to resume training that was broken accidentally
             )
+            print("task finished....")
 
         if trainer.global_rank == 0:
             # We do not perform averaging checkpoint in the case of hpo for each trial
@@ -1632,6 +1639,12 @@ class MultiModalPredictor:
                 )
         else:
             sys.exit(f"Training finished, exit the process with global_rank={trainer.global_rank}...")
+
+        if "get_loader" in is_pretrain:
+            checkpoint = {
+                "state_dict": {"model." + name: param for name, param in self._model.fusion_transformer.state_dict().items()}
+            }
+            torch.save(checkpoint, os.path.join("./", "pretrained_backbone.ckpt"))
 
     def _top_k_average(
         self,
@@ -1775,11 +1788,6 @@ class MultiModalPredictor:
         # clean the last checkpoint
         if os.path.isfile(last_ckpt_path):
             os.remove(last_ckpt_path)
-
-        checkpoint = {
-            "state_dict": {"model." + name: param for name, param in self._model.fusion_transformer.state_dict().items()}
-        }
-        torch.save(checkpoint, os.path.join("./", "pretrained_backbone.ckpt"))
 
     def _default_predict(
         self,

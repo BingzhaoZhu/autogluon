@@ -1,6 +1,6 @@
 import logging
 from typing import Callable, Dict, List, Optional, Union
-
+import numpy as np
 import pytorch_lightning as pl
 import torch
 import torch.nn.functional as F
@@ -8,6 +8,7 @@ import torchmetrics
 from torch import nn
 from torch.nn.modules.loss import _Loss
 from torchmetrics.aggregation import BaseAggregator
+import learn2learn as l2l
 
 from ..constants import AUTOMM, LM_TARGET, LOGITS, T_FEW, TEMPLATE_LOGITS, WEIGHT
 from ..data.mixup import MixupModule, multimodel_mixup
@@ -45,6 +46,7 @@ class MetaModule(pl.LightningModule):
         mixup_fn: Optional[MixupModule] = None,
         mixup_off_epoch: Optional[int] = 0,
         model_postprocess_fn: Callable = None,
+        all_pretrain_tasks=None,
     ):
         """
         Parameters
@@ -111,7 +113,7 @@ class MetaModule(pl.LightningModule):
         """
         super().__init__()
         self.save_hyperparameters(
-            ignore=["model", "validation_metric", "test_metric", "loss_func", "model_postprocess_fn"]
+            ignore=["model", "validation_metric", "test_metric", "loss_func", "model_postprocess_fn", "all_pretrain_tasks"]
         )
         self.model = model
         self.validation_metric = validation_metric
@@ -127,39 +129,8 @@ class MetaModule(pl.LightningModule):
         self.model_postprocess_fn = model_postprocess_fn
         self.trainable_param_names = trainable_param_names if trainable_param_names else []
         # self.freeze_backbone(freeze=True)
-
-    def _compute_template_loss(
-        self,
-        per_output: Dict,
-        label: torch.Tensor,
-    ):
-        logits = per_output[TEMPLATE_LOGITS]
-        choices_scores = per_output[LOGITS]
-        lm_target = per_output[LM_TARGET]
-
-        num_choices = self.model.num_classes
-        bs = int(lm_target.size(0) / num_choices)
-
-        lm_loss = F.cross_entropy(
-            logits.view(bs, num_choices, *logits.size()[1:])[range(bs), label].flatten(0, 1),
-            lm_target.view(bs, num_choices, -1)[range(bs), label].flatten(0, 1),
-        )
-        if self.model.mc_loss > 0:
-            mc_loss = F.cross_entropy(choices_scores, label)
-        else:
-            mc_loss = 0.0
-
-        if self.model.unlikely_loss > 0:
-            cand_loglikely = -F.cross_entropy(logits.flatten(0, 1), lm_target.flatten(0, 1), reduction="none").view(
-                bs, num_choices, -1
-            )
-            cand_loglikely += (lm_target < 0).view(bs, num_choices, -1) * -100
-            cand_loglikely[range(bs), label] = -100
-            unlikely_loss = -torch.log(1 - torch.exp(cand_loglikely) + 1e-2).sum() / (cand_loglikely != -100).sum()
-        else:
-            unlikely_loss = 0.0
-
-        return lm_loss + mc_loss * self.model.mc_loss + unlikely_loss * self.model.unlikely_loss
+        self.all_pretrain_tasks = all_pretrain_tasks
+        self.adaptation_steps = 5
 
     def _compute_loss(
         self,
@@ -201,14 +172,71 @@ class MetaModule(pl.LightningModule):
     def _shared_step(
         self,
         batch: Dict,
+        model=None,
     ):
+        if model is None:
+            model = self.model
         label = batch[self.model.label_key]
         if self.mixup_fn is not None:
             self.mixup_fn.mixup_enabled = self.training & (self.current_epoch < self.hparams.mixup_off_epoch)
-            batch, label = multimodel_mixup(batch=batch, model=self.model, mixup_fn=self.mixup_fn)
-        output = self.model(batch)
+            batch, label = multimodel_mixup(batch=batch, model=model, mixup_fn=self.mixup_fn)
+        output = model(batch)
         loss = self._compute_loss(output=output, label=label)
         return output, loss
+
+    def _set_loader_spec(self, loader):
+        self.model = l2l.algorithms.MAML(loader["model"], lr=0.001, first_order=False, allow_unused=True).to("cuda:0")
+        module = loader["data_module"]
+        module.setup("fit")
+        return module.train_dataloader()
+
+    def _split_batch(self, batch, queries):
+        N = batch[self.model.label_key].size(0)
+        # print(np.unique(batch[self.model.label_key]))
+        support, query = {}, {}
+
+        # Separate data into adaptation and evaluation sets
+        support_indices = np.zeros(N, dtype=bool)
+        selection = np.random.permutation(N)[:int(N * queries)]
+        support_indices[selection] = True
+        query_indices = torch.from_numpy(~support_indices)
+        support_indices = torch.from_numpy(support_indices)
+
+        for per_key in batch:
+            if "categorical_transformer_categorical" in per_key:
+                per_support, per_query = [], []
+                for t in batch[per_key]:
+                    per_support.append(t[support_indices].to("cuda:0"))
+                    per_query.append(t[query_indices].to("cuda:0"))
+                support[per_key] = tuple(per_support)
+                query[per_key] = tuple(per_query)
+            else:
+                support[per_key] = batch[per_key][support_indices].to("cuda:0")
+                query[per_key] = batch[per_key][query_indices].to("cuda:0")
+
+        return support, query
+
+    @torch.enable_grad()
+    def meta_learn(self, meta_batch, queries=0.5):
+        loss = 0
+        for idx in meta_batch:
+            loader = self.all_pretrain_tasks[idx]
+            loader = self._set_loader_spec(loader)
+            learner = self.model.clone()
+            learner.train()
+
+            batch = next(iter(loader))
+            support, query = self._split_batch(batch, queries)
+
+            # Adapt the model
+            for step in range(self.adaptation_steps):
+                _, train_error = self._shared_step(support, learner)
+                learner.adapt(train_error)
+
+            # Evaluating the adapted model
+            _, query_loss = self._shared_step(query, learner)
+            loss += query_loss
+        return loss
 
     def training_step(self, batch, batch_idx):
         """
@@ -231,7 +259,8 @@ class MetaModule(pl.LightningModule):
         """
         # if self.current_epoch >= 2:
         #     self.freeze_backbone(freeze=False)
-        output, loss = self._shared_step(batch)
+        loss = self.meta_learn(batch)
+        print(loss)
         self.log("train_loss", loss)
         return loss
 
@@ -257,17 +286,17 @@ class MetaModule(pl.LightningModule):
         batch_idx
             Index of mini-batch.
         """
-        output, loss = self._shared_step(batch)
-        if self.model_postprocess_fn:
-            output = self.model_postprocess_fn(output)
+        loss = self.meta_learn(batch)
+        # if self.model_postprocess_fn:
+        #     output = self.model_postprocess_fn(output)
         # By default, on_step=False and on_epoch=True
         self.log("val_loss", loss)
-        self._compute_metric_score(
-            metric=self.validation_metric,
-            custom_metric_func=self.custom_metric_func,
-            logits=output[self.model.prefix][LOGITS],
-            label=batch[self.model.label_key],
-        ),
+        # self._compute_metric_score(
+        #     metric=self.validation_metric,
+        #     custom_metric_func=self.custom_metric_func,
+        #     logits=output[self.model.prefix][LOGITS],
+        #     label=batch[self.model.label_key],
+        # ),
         self.log(
             self.validation_metric_name,
             self.validation_metric,

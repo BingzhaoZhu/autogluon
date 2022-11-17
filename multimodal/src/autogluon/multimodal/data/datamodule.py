@@ -241,7 +241,7 @@ class MetaDataModule(LightningDataModule):
         """
         super().__init__()
         self.n = num_datasets
-        self.data = torch.arange(self.n)
+        self.data = torch.arange(self.n)[:, None]
         self.per_gpu_batch_size = per_gpu_batch_size
 
     def train_dataloader(self):
