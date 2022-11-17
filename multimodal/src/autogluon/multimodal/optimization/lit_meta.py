@@ -16,7 +16,7 @@ from .utils import apply_layerwise_lr_decay, apply_single_lr, apply_two_stages_l
 logger = logging.getLogger(AUTOMM)
 
 
-class LitModule(pl.LightningModule):
+class MetaModule(pl.LightningModule):
     """
     Control the loops for training, evaluation, and prediction. This module is independent of
     the model definition. This class inherits from the Pytorch Lightning's LightningModule:

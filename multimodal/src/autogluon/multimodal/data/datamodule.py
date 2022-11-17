@@ -1,6 +1,7 @@
 from typing import Dict, List, Optional, Union
 
 import pandas as pd
+import torch
 from pytorch_lightning import LightningDataModule
 from torch.utils.data import DataLoader
 
@@ -217,3 +218,97 @@ class BaseDataModule(LightningDataModule):
             ),
         )
         return loader
+
+
+class MetaDataModule(LightningDataModule):
+    """
+    Set up Pytorch DataSet and DataLoader objects to prepare data for single-modal/multimodal training,
+    validation, testing, and prediction. We organize the multimodal data using pd.DataFrame.
+    For some modalities, e.g, image, that cost much memory, we only store their disk path to do lazy loading.
+    This class inherits from the Pytorch Lightning's LightningDataModule:
+    https://pytorch-lightning.readthedocs.io/en/latest/extensions/datamodules.html
+    """
+
+    def __init__(
+        self,
+        per_gpu_batch_size=4,
+        num_datasets=None,
+        validate_data: Optional[pd.DataFrame] = None,
+        test_data: Optional[pd.DataFrame] = None,
+        predict_data: Optional[pd.DataFrame] = None,
+    ):
+        """doc str
+        """
+        super().__init__()
+        self.n = num_datasets
+        self.data = torch.arange(self.n)
+        self.per_gpu_batch_size = per_gpu_batch_size
+
+    def train_dataloader(self):
+        """
+        Create the dataloader for training.
+        This method is registered by Pytorch Lightning's LightningDataModule.
+        Refer to: https://pytorch-lightning.readthedocs.io/en/latest/extensions/datamodules.html#train-dataloader
+
+        Returns
+        -------
+        A Pytorch DataLoader object.
+        """
+        loader = DataLoader(
+            self.data,
+            batch_size=self.per_gpu_batch_size,
+            shuffle=True,
+        )
+        return loader
+
+    def val_dataloader(self):
+        """
+        Create the dataloader for validation.
+        This method is registered by Pytorch Lightning's LightningDataModule.
+        Refer to: https://pytorch-lightning.readthedocs.io/en/latest/extensions/datamodules.html#val-dataloader
+
+        Returns
+        -------
+        A Pytorch DataLoader object.
+        """
+        loader = DataLoader(
+            self.data,
+            batch_size=self.per_gpu_batch_size,
+            shuffle=True,
+        )
+        return loader
+
+    def test_dataloader(self):
+        """
+        Create the dataloader for test.
+        This method is registered by Pytorch Lightning's LightningDataModule.
+        Refer to: https://pytorch-lightning.readthedocs.io/en/latest/extensions/datamodules.html#test-dataloader
+
+        Returns
+        -------
+        A Pytorch DataLoader object.
+        """
+        loader = DataLoader(
+            self.data,
+            batch_size=self.per_gpu_batch_size,
+            shuffle=True,
+        )
+        return loader
+
+    def predict_dataloader(self):
+        """
+        Create the dataloader for prediction.
+        This method is registered by Pytorch Lightning's LightningDataModule.
+        Refer to: https://pytorch-lightning.readthedocs.io/en/latest/extensions/datamodules.html#predict-dataloader
+
+        Returns
+        -------
+        A Pytorch DataLoader object.
+        """
+        loader = DataLoader(
+            self.data,
+            batch_size=self.per_gpu_batch_size,
+            shuffle=True,
+        )
+        return loader
+

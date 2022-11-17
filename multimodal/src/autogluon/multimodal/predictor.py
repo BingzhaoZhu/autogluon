@@ -82,7 +82,7 @@ from .constants import (
     Y_TRUE,
     ZERO_SHOT_IMAGE_CLASSIFICATION,
 )
-from .data.datamodule import BaseDataModule
+from .data.datamodule import BaseDataModule, MetaDataModule
 from .data.infer_types import (
     infer_column_types,
     infer_label_column_type_by_problem_type,
@@ -95,6 +95,7 @@ from .matcher import MultiModalMatcher
 from .models.utils import get_model_postprocess_fn
 from .optimization.lit_distiller import DistillerLitModule
 from .optimization.lit_mmdet import MMDetLitModule
+from .optimization.lit_meta import MetaModule
 from .optimization.lit_module import LitModule
 from .optimization.lit_ner import NerLitModule
 from .optimization.losses import RKDLoss
@@ -1218,11 +1219,21 @@ class MultiModalPredictor:
             model = self._model
 
         pretrain_path = os.path.join("./", "pretrained_backbone.ckpt")
-        if is_pretrain and os.path.isfile(pretrain_path):
+        if is_pretrain["is_pretrain"] and os.path.isfile(pretrain_path):
             model.fusion_transformer = self._load_state_dict(
                 model=model.fusion_transformer,
                 path=pretrain_path,
             )
+
+        if "get_loader" in is_pretrain:
+            selected = []
+            all_pretrain_tasks = []
+            for dsid in is_pretrain["get_loader"]:
+                filename = "./loaders"+str(dsid)+".sav"
+                if os.path.exists(filename):
+                    selected.append(dsid)
+                    all_pretrain_tasks.append(pickle.load(open(filename, 'rb')))
+            is_pretrain["get_loader"] = selected
 
         norm_param_names = get_norm_layer_param_names(model)
 
@@ -1336,15 +1347,20 @@ class MultiModalPredictor:
 
         val_use_training_mode = (self._problem_type == OBJECT_DETECTION) and (validation_metric_name != MAP)
 
-        train_dm = BaseDataModule(
-            df_preprocessor=df_preprocessor,
-            data_processors=data_processors,
-            per_gpu_batch_size=config.env.per_gpu_batch_size,
-            num_workers=config.env.num_workers,
-            train_data=train_df,
-            validate_data=val_df,
-            val_use_training_mode=val_use_training_mode,
-        )
+        if "get_loader" in is_pretrain:
+            train_dm = MetaDataModule(
+                num_datasets=len(is_pretrain["get_loader"])
+            )
+        else:
+            train_dm = BaseDataModule(
+                df_preprocessor=df_preprocessor,
+                data_processors=data_processors,
+                per_gpu_batch_size=config.env.per_gpu_batch_size,
+                num_workers=config.env.num_workers,
+                train_data=train_df,
+                validate_data=val_df,
+                val_use_training_mode=val_use_training_mode,
+            )
         optimization_kwargs = dict(
             optim_type=config.optimization.optim_type,
             lr_choice=config.optimization.lr_choice,
@@ -1409,17 +1425,30 @@ class MultiModalPredictor:
                 **optimization_kwargs,
             )
         else:
-            task = LitModule(
-                model=model,
-                loss_func=loss_func,
-                efficient_finetune=OmegaConf.select(config, "optimization.efficient_finetune"),
-                mixup_fn=mixup_fn,
-                mixup_off_epoch=OmegaConf.select(config, "data.mixup.turn_off_epoch"),
-                model_postprocess_fn=model_postprocess_fn,
-                trainable_param_names=trainable_param_names,
-                **metrics_kwargs,
-                **optimization_kwargs,
-            )
+            if "get_loader" in is_pretrain:
+                task = MetaModule(
+                    model=model,
+                    loss_func=loss_func,
+                    efficient_finetune=OmegaConf.select(config, "optimization.efficient_finetune"),
+                    mixup_fn=mixup_fn,
+                    mixup_off_epoch=OmegaConf.select(config, "data.mixup.turn_off_epoch"),
+                    model_postprocess_fn=model_postprocess_fn,
+                    trainable_param_names=trainable_param_names,
+                    **metrics_kwargs,
+                    **optimization_kwargs,
+                )
+            else:
+                task = LitModule(
+                    model=model,
+                    loss_func=loss_func,
+                    efficient_finetune=OmegaConf.select(config, "optimization.efficient_finetune"),
+                    mixup_fn=mixup_fn,
+                    mixup_off_epoch=OmegaConf.select(config, "data.mixup.turn_off_epoch"),
+                    model_postprocess_fn=model_postprocess_fn,
+                    trainable_param_names=trainable_param_names,
+                    **metrics_kwargs,
+                    **optimization_kwargs,
+                )
 
         logger.debug(f"validation_metric_name: {task.validation_metric_name}")
         logger.debug(f"minmax_mode: {minmax_mode}")
@@ -1557,6 +1586,19 @@ class MultiModalPredictor:
                 reload_dataloaders_every_n_epochs=1,
                 plugins=[custom_checkpoint_plugin],
             )
+
+
+        if "set_loader" in is_pretrain:
+            task_id = is_pretrain["set_loader"]
+            filename = f'./loaders/{task_id}.sav'
+            saver = {
+                "data_module": train_dm,
+                "metrics": metrics_kwargs,
+                "loss_func": loss_func,
+                "model_postprocess_fn": model_postprocess_fn,
+            }
+            pickle.dump(saver, open(filename, 'wb'))
+            raise Exception(f"successfully saved datamodule for task: {task_id}")
 
         with warnings.catch_warnings():
             warnings.filterwarnings(
