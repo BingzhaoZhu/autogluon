@@ -1112,7 +1112,7 @@ class MultiModalPredictor:
         self,
         name,
     ):
-        name = ''.join(random.choices(string.ascii_lowercase, k=20))
+        # name = ''.join(random.choices(string.ascii_lowercase, k=20))
         checkpoint = {
             "state_dict": {"model." + name: param for name, param in
                            self._model.fusion_transformer.state_dict().items()}
