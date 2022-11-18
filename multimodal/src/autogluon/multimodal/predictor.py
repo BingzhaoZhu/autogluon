@@ -1119,7 +1119,7 @@ class MultiModalPredictor:
         }
         torch.save(checkpoint, os.path.join("./", "pretrained.ckpt"))
         s3 = boto3.resource('s3')
-        s3.Bucket('automl-benchmark-bingzzhu').upload_file('./pretrained.ckpt', 'ec2/2022_09_14/cross_table_pretrain/raw/'+ name +'.ckpt')
+        s3.Bucket('automl-benchmark-bingzzhu').upload_file('./pretrained.ckpt', 'cross_table_pretrain/raw/'+ name +'.ckpt')
         return
 
     def _load_s3(
@@ -1129,7 +1129,7 @@ class MultiModalPredictor:
         try:
             s3 = boto3.resource('s3')
             s3.Bucket('automl-benchmark-bingzzhu').download_file(
-                'ec2/2022_09_14/cross_table_pretrain/pretrained.ckpt',
+                'cross_table_pretrain/pretrained.ckpt',
                 './pretrained.ckpt'
             )
             pretrain_path = os.path.join("./", "pretrained.ckpt")
