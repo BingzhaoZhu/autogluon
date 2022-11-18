@@ -1137,6 +1137,7 @@ class MultiModalPredictor:
                 model=model.fusion_transformer,
                 path=pretrain_path,
             )
+            print("successfully loaded backbone from s3.")
         except:
             pass
         return model
