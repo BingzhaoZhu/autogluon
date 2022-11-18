@@ -14,6 +14,9 @@ from collections import OrderedDict
 from dataclasses import dataclass
 from datetime import timedelta
 from typing import Dict, List, Optional, Union
+import boto3
+import random
+import string
 
 import numpy as np
 import pandas as pd
@@ -95,7 +98,6 @@ from .matcher import MultiModalMatcher
 from .models.utils import get_model_postprocess_fn
 from .optimization.lit_distiller import DistillerLitModule
 from .optimization.lit_mmdet import MMDetLitModule
-from .optimization.lit_meta import MetaModule
 from .optimization.lit_module import LitModule
 from .optimization.lit_ner import NerLitModule
 from .optimization.losses import RKDLoss
@@ -1106,49 +1108,39 @@ class MultiModalPredictor:
             teacher_predictor._data_processors,
         )
 
-    def _prefit(
+    def _save_s3(
         self,
-        train_df_list: List[pd.DataFrame],
-        val_df_list: List[pd.DataFrame],
-        validation_metric_name: str,
-        minmax_mode: str,
-        max_time: timedelta,
-        save_path: str,
-        ckpt_path: str,
-        resume: bool,
-        enable_progress_bar: bool,
-        presets: Optional[str] = None,
-        config: Optional[dict] = None,
-        hyperparameters: Optional[Union[str, Dict, List[str]]] = None,
-        teacher_predictor: Union[str, MultiModalPredictor] = None,
-        hpo_mode: bool = False,
-        standalone: bool = True,
-        **hpo_kwargs,
+        name,
     ):
-
+        name = ''.join(random.choices(string.ascii_lowercase, k=20))
+        checkpoint = {
+            "state_dict": {"model." + name: param for name, param in
+                           self._model.fusion_transformer.state_dict().items()}
+        }
+        torch.save(checkpoint, os.path.join("./", "pretrained.ckpt"))
+        s3 = boto3.resource('s3')
+        s3.Bucket('automl-benchmark-bingzzhu').upload_file('./pretrained.ckpt', 'cross_table_pretrain/raw/'+ name +'.ckpt')
         return
 
-    def _prefit_one(
+    def _load_s3(
         self,
-        train_df: pd.DataFrame,
-        val_df: pd.DataFrame,
-        validation_metric_name: str,
-        minmax_mode: str,
-        max_time: timedelta,
-        save_path: str,
-        ckpt_path: str,
-        resume: bool,
-        enable_progress_bar: bool,
-        presets: Optional[str] = None,
-        config: Optional[dict] = None,
-        hyperparameters: Optional[Union[str, Dict, List[str]]] = None,
-        teacher_predictor: Union[str, MultiModalPredictor] = None,
-        hpo_mode: bool = False,
-        standalone: bool = True,
-        **hpo_kwargs,
+        model,
     ):
+        try:
+            s3 = boto3.resource('s3')
+            s3.Bucket('automl-benchmark-bingzzhu').download_file(
+                'cross_table_pretrain/pretrained.ckpt',
+                './pretrained.ckpt'
+            )
+            pretrain_path = os.path.join("./", "pretrained.ckpt")
+            model.fusion_transformer = self._load_state_dict(
+                model=model.fusion_transformer,
+                path=pretrain_path,
+            )
+        except:
+            pass
+        return model
 
-        return
 
     def _fit(
         self,
@@ -1218,25 +1210,8 @@ class MultiModalPredictor:
         else:  # continuing training
             model = self._model
 
-        pretrain_path = os.path.join("./", "pretrained_backbone.ckpt")
-        if is_pretrain["is_pretrain"] and os.path.isfile(pretrain_path):
-            print("loading pretrained backbone...")
-            model.fusion_transformer = self._load_state_dict(
-                model=model.fusion_transformer,
-                path=pretrain_path,
-            )
-
-        if "get_loader" in is_pretrain:
-            selected = []
-            all_pretrain_tasks = []
-            for dsid in is_pretrain["get_loader"]:
-                filename = "./loaders/"+str(dsid)+".sav"
-                if os.path.exists(filename):
-                    selected.append(dsid)
-                    per_pretrain_task = pickle.load(open(filename, 'rb'))
-                    per_pretrain_task["model"].fusion_transformer = model.fusion_transformer
-                    all_pretrain_tasks.append(per_pretrain_task)
-            is_pretrain["get_loader"] = selected
+        # load if exist
+        model = self._load_s3(model)
 
         norm_param_names = get_norm_layer_param_names(model)
 
@@ -1350,20 +1325,15 @@ class MultiModalPredictor:
 
         val_use_training_mode = (self._problem_type == OBJECT_DETECTION) and (validation_metric_name != MAP)
 
-        if "get_loader" in is_pretrain:
-            train_dm = MetaDataModule(
-                num_datasets=len(is_pretrain["get_loader"])
-            )
-        else:
-            train_dm = BaseDataModule(
-                df_preprocessor=df_preprocessor,
-                data_processors=data_processors,
-                per_gpu_batch_size=config.env.per_gpu_batch_size,
-                num_workers=config.env.num_workers,
-                train_data=train_df,
-                validate_data=val_df,
-                val_use_training_mode=val_use_training_mode,
-            )
+        train_dm = BaseDataModule(
+            df_preprocessor=df_preprocessor,
+            data_processors=data_processors,
+            per_gpu_batch_size=config.env.per_gpu_batch_size,
+            num_workers=config.env.num_workers,
+            train_data=train_df,
+            validate_data=val_df,
+            val_use_training_mode=val_use_training_mode,
+        )
         optimization_kwargs = dict(
             optim_type=config.optimization.optim_type,
             lr_choice=config.optimization.lr_choice,
@@ -1428,31 +1398,17 @@ class MultiModalPredictor:
                 **optimization_kwargs,
             )
         else:
-            if "get_loader" in is_pretrain:
-                task = MetaModule(
-                    model=model,
-                    loss_func=loss_func,
-                    efficient_finetune=OmegaConf.select(config, "optimization.efficient_finetune"),
-                    mixup_fn=mixup_fn,
-                    mixup_off_epoch=OmegaConf.select(config, "data.mixup.turn_off_epoch"),
-                    model_postprocess_fn=model_postprocess_fn,
-                    trainable_param_names=trainable_param_names,
-                    all_pretrain_tasks=all_pretrain_tasks,
-                    **metrics_kwargs,
-                    **optimization_kwargs,
-                )
-            else:
-                task = LitModule(
-                    model=model,
-                    loss_func=loss_func,
-                    efficient_finetune=OmegaConf.select(config, "optimization.efficient_finetune"),
-                    mixup_fn=mixup_fn,
-                    mixup_off_epoch=OmegaConf.select(config, "data.mixup.turn_off_epoch"),
-                    model_postprocess_fn=model_postprocess_fn,
-                    trainable_param_names=trainable_param_names,
-                    **metrics_kwargs,
-                    **optimization_kwargs,
-                )
+            task = LitModule(
+                model=model,
+                loss_func=loss_func,
+                efficient_finetune=OmegaConf.select(config, "optimization.efficient_finetune"),
+                mixup_fn=mixup_fn,
+                mixup_off_epoch=OmegaConf.select(config, "data.mixup.turn_off_epoch"),
+                model_postprocess_fn=model_postprocess_fn,
+                trainable_param_names=trainable_param_names,
+                **metrics_kwargs,
+                **optimization_kwargs,
+            )
 
         logger.debug(f"validation_metric_name: {task.validation_metric_name}")
         logger.debug(f"minmax_mode: {minmax_mode}")
@@ -1572,7 +1528,7 @@ class MultiModalPredictor:
                 max_epochs=config.optimization.max_epochs,
                 max_steps=config.optimization.max_steps,
                 max_time=max_time,
-                callbacks=None if "get_loader" in is_pretrain else callbacks,
+                callbacks=callbacks,
                 logger=tb_logger,
                 gradient_clip_val=OmegaConf.select(config, "optimization.gradient_clip_val", default=1),
                 gradient_clip_algorithm=OmegaConf.select(
@@ -1580,7 +1536,7 @@ class MultiModalPredictor:
                 ),
                 accumulate_grad_batches=grad_steps,
                 log_every_n_steps=OmegaConf.select(config, "optimization.log_every_n_steps", default=10),
-                enable_progress_bar= False if is_pretrain else enable_progress_bar,
+                enable_progress_bar=False if is_pretrain else enable_progress_bar,
                 fast_dev_run=config.env.fast_dev_run,
                 track_grad_norm=OmegaConf.select(config, "optimization.track_grad_norm", default=-1),
                 val_check_interval=config.optimization.val_check_interval,
@@ -1590,21 +1546,6 @@ class MultiModalPredictor:
                 reload_dataloaders_every_n_epochs=1,
                 plugins=[custom_checkpoint_plugin],
             )
-
-
-        if "set_loader" in is_pretrain:
-            task_id = is_pretrain["set_loader"]
-            filename = f'./loaders/{task_id}.sav'
-            model.fusion_transformer = None
-            saver = {
-                "model": model,
-                "data_module": train_dm,
-                "metrics": metrics_kwargs,
-                "loss_func": loss_func,
-                "model_postprocess_fn": model_postprocess_fn,
-            }
-            pickle.dump(saver, open(filename, 'wb'))
-            raise Exception(f"successfully saved datamodule for task: {task_id}")
 
         with warnings.catch_warnings():
             warnings.filterwarnings(
@@ -1619,7 +1560,6 @@ class MultiModalPredictor:
                 datamodule=train_dm,
                 ckpt_path=ckpt_path if resume else None,  # this is to resume training that was broken accidentally
             )
-            print("task finished....")
 
         if trainer.global_rank == 0:
             # We do not perform averaging checkpoint in the case of hpo for each trial
@@ -1637,14 +1577,9 @@ class MultiModalPredictor:
                     strict_loading=not trainable_param_names,  # Not strict loading if using parameter-efficient finetuning
                     standalone=standalone,
                 )
+                self._save_s3(is_pretrain)
         else:
             sys.exit(f"Training finished, exit the process with global_rank={trainer.global_rank}...")
-
-        if "get_loader" in is_pretrain:
-            checkpoint = {
-                "state_dict": {"model." + name: param for name, param in self._model.fusion_transformer.state_dict().items()}
-            }
-            torch.save(checkpoint, os.path.join("./", "pretrained_backbone.ckpt"))
 
     def _top_k_average(
         self,
@@ -1788,6 +1723,7 @@ class MultiModalPredictor:
         # clean the last checkpoint
         if os.path.isfile(last_ckpt_path):
             os.remove(last_ckpt_path)
+
 
     def _default_predict(
         self,
