@@ -1140,7 +1140,6 @@ class MultiModalPredictor:
             print("successfully loaded backbone from s3.")
         except:
             print("Loading not successful, training from scratch.")
-            pass
         return model
 
 
