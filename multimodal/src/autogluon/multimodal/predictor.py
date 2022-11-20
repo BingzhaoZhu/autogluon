@@ -1125,14 +1125,15 @@ class MultiModalPredictor:
     def _load_s3(
         self,
         model,
+        name,
     ):
         try:
             s3 = boto3.resource('s3')
             s3.Bucket('automl-benchmark-bingzzhu').download_file(
                 'ec2/2022_09_14/cross_table_pretrain/pretrained.ckpt',
-                './pretrained.ckpt'
+                './' + name + '.ckpt'
             )
-            pretrain_path = os.path.join("./", "pretrained.ckpt")
+            pretrain_path = os.path.join("./", name + '.ckpt')
             model.fusion_transformer = self._load_state_dict(
                 model=model.fusion_transformer,
                 path=pretrain_path,
@@ -1212,7 +1213,7 @@ class MultiModalPredictor:
             model = self._model
 
         # load if exist
-        model = self._load_s3(model)
+        model = self._load_s3(model, is_pretrain)
 
         norm_param_names = get_norm_layer_param_names(model)
 
