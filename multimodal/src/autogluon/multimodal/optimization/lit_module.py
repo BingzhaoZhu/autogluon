@@ -1,5 +1,7 @@
 import logging
 from typing import Callable, Dict, List, Optional, Union
+import boto3
+import os
 
 import pytorch_lightning as pl
 import torch
@@ -45,6 +47,7 @@ class LitModule(pl.LightningModule):
         mixup_fn: Optional[MixupModule] = None,
         mixup_off_epoch: Optional[int] = 0,
         model_postprocess_fn: Callable = None,
+        is_pretrain=None,
     ):
         """
         Parameters
@@ -127,6 +130,10 @@ class LitModule(pl.LightningModule):
         self.model_postprocess_fn = model_postprocess_fn
         self.trainable_param_names = trainable_param_names if trainable_param_names else []
         # self.freeze_backbone(freeze=True)
+        self.is_pretrain = is_pretrain
+        self.prev_state_dic = None
+        self.upload_per_n_iter = 20
+        self.current_iter = 0
 
     def _compute_template_loss(
         self,
@@ -198,6 +205,51 @@ class LitModule(pl.LightningModule):
         else:
             metric.update(logits.squeeze(dim=1), label)
 
+    def _save_s3(
+        self,
+    ):
+        checkpoint = {
+            "state_dict": {name: param for name, param in
+                           self.model.fusion_transformer.state_dict().items()}
+        }
+        torch.save(checkpoint, os.path.join("./", "pretrained.ckpt"))
+        s3 = boto3.resource('s3')
+        s3.Bucket('automl-benchmark-bingzzhu').upload_file('./pretrained.ckpt', 'ec2/2022_09_14/cross_table_pretrain/pretrained_hogwild.ckpt')
+        return
+
+    def _load_s3(
+        self,
+    ):
+        try:
+            s3 = boto3.resource('s3')
+            s3.Bucket('automl-benchmark-bingzzhu').download_file(
+                'ec2/2022_09_14/cross_table_pretrain/pretrained_hogwild.ckpt',
+                './pretrained.ckpt'
+            )
+            pretrain_path = os.path.join("./", 'pretrained.ckpt')
+            state_dict = torch.load(pretrain_path, map_location=torch.device("cuda"))["state_dict"]
+            print("successfully loaded backbone from s3.")
+        except:
+            state_dict = None
+            print("Loading not successful, training from scratch.")
+        return state_dict
+
+    def _on_train_start(self):
+        state_dict = self._load_s3()
+        while state_dict is None:
+            state_dict = self._load_s3()
+        if self.prev_state_dic is None:
+            self.prev_state_dic = state_dict
+        if state_dict is None:
+            self._save_s3()
+        current_state_dic = self.model.fusion_transformer.state_dict()
+        with torch.no_grad():
+            for name in current_state_dic:
+                current_state_dic[name] = current_state_dic[name]-self.prev_state_dic[name]+state_dict[name]
+        self.model.fusion_transformer.load_state_dict(current_state_dic)
+        self.prev_state_dic = current_state_dic
+        self._save_s3()
+
     def _shared_step(
         self,
         batch: Dict,
@@ -209,6 +261,23 @@ class LitModule(pl.LightningModule):
         output = self.model(batch)
         loss = self._compute_loss(output=output, label=label)
         return output, loss
+
+    @staticmethod
+    def _load_state_dict(
+            model: nn.Module,
+            state_dict: dict = None,
+            path: str = None,
+            prefix: str = "model.",
+            strict: bool = True,
+    ):
+        if state_dict is None:
+            state_dict = torch.load(path, map_location=torch.device("cpu"))["state_dict"]
+        state_dict = {k.partition(prefix)[2]: v for k, v in state_dict.items() if k.startswith(prefix)}
+        load_result = model.load_state_dict(state_dict, strict=strict)
+        assert (
+                len(load_result.unexpected_keys) == 0
+        ), f"Load model failed, unexpected keys {load_result.unexpected_keys.__str__()}"
+        return model
 
     def training_step(self, batch, batch_idx):
         """
@@ -229,8 +298,12 @@ class LitModule(pl.LightningModule):
         -------
         Average loss of the mini-batch data.
         """
-        # if self.current_epoch >= 2:
-        #     self.freeze_backbone(freeze=False)
+        if self.is_pretrain:
+            if self.current_iter == self.upload_per_n_iter:
+                self._on_train_start()
+                self.current_iter = 0
+            else:
+                self.current_iter += 1
         output, loss = self._shared_step(batch)
         self.log("train_loss", loss)
         return loss

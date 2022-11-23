@@ -1108,42 +1108,6 @@ class MultiModalPredictor:
             teacher_predictor._data_processors,
         )
 
-    def _save_s3(
-        self,
-        name,
-    ):
-        # name = ''.join(random.choices(string.ascii_lowercase, k=20))
-        checkpoint = {
-            "state_dict": {"model." + name: param for name, param in
-                           self._model.fusion_transformer.state_dict().items()}
-        }
-        torch.save(checkpoint, os.path.join("./", "pretrained.ckpt"))
-        s3 = boto3.resource('s3')
-        s3.Bucket('automl-benchmark-bingzzhu').upload_file('./pretrained.ckpt', 'ec2/2022_09_14/cross_table_pretrain/raw/'+ name +'.ckpt')
-        return
-
-    def _load_s3(
-        self,
-        model,
-        name,
-    ):
-        try:
-            s3 = boto3.resource('s3')
-            s3.Bucket('automl-benchmark-bingzzhu').download_file(
-                'ec2/2022_09_14/cross_table_pretrain/pretrained.ckpt',
-                './' + name + '.ckpt'
-            )
-            pretrain_path = os.path.join("./", name + '.ckpt')
-            model.fusion_transformer = self._load_state_dict(
-                model=model.fusion_transformer,
-                path=pretrain_path,
-            )
-            print("successfully loaded backbone from s3.")
-        except:
-            print("Loading not successful, training from scratch.")
-        return model
-
-
     def _fit(
         self,
         train_df: pd.DataFrame,
@@ -1212,8 +1176,18 @@ class MultiModalPredictor:
         else:  # continuing training
             model = self._model
 
-        # load if exist
-        model = self._load_s3(model, is_pretrain)
+        s3 = boto3.client('s3')
+        try:
+            s3.head_object(Bucket='automl-benchmark-bingzzhu', Key='ec2/2022_09_14/cross_table_pretrain/pretrained_hogwild.ckpt')
+        except:
+            checkpoint = {
+                "state_dict": {name: param for name, param in
+                               model.fusion_transformer.state_dict().items()}
+            }
+            torch.save(checkpoint, os.path.join("./", "pretrained.ckpt"))
+            s3 = boto3.resource('s3')
+            s3.Bucket('automl-benchmark-bingzzhu').upload_file('./pretrained.ckpt',
+                                                               'ec2/2022_09_14/cross_table_pretrain/pretrained_hogwild.ckpt')
 
         norm_param_names = get_norm_layer_param_names(model)
 
@@ -1408,6 +1382,7 @@ class MultiModalPredictor:
                 mixup_off_epoch=OmegaConf.select(config, "data.mixup.turn_off_epoch"),
                 model_postprocess_fn=model_postprocess_fn,
                 trainable_param_names=trainable_param_names,
+                is_pretrain=is_pretrain,
                 **metrics_kwargs,
                 **optimization_kwargs,
             )
@@ -1579,7 +1554,6 @@ class MultiModalPredictor:
                     strict_loading=not trainable_param_names,  # Not strict loading if using parameter-efficient finetuning
                     standalone=standalone,
                 )
-                self._save_s3(is_pretrain)
         else:
             sys.exit(f"Training finished, exit the process with global_rank={trainer.global_rank}...")
 
