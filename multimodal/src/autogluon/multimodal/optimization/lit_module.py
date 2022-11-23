@@ -2,6 +2,8 @@ import logging
 from typing import Callable, Dict, List, Optional, Union
 import boto3
 import os
+import time
+import json
 
 import pytorch_lightning as pl
 import torch
@@ -132,7 +134,7 @@ class LitModule(pl.LightningModule):
         # self.freeze_backbone(freeze=True)
         self.is_pretrain = is_pretrain
         self.prev_state_dic = None
-        self.upload_per_n_iter = 5
+        self.upload_per_n_iter = is_pretrain["upload_per_n_iter"]
         self.current_iter = 0
 
     def _compute_template_loss(
@@ -207,37 +209,41 @@ class LitModule(pl.LightningModule):
 
     def _save_s3(
         self,
+        target='ec2/2022_09_14/cross_table_pretrain/pretrained_hogwild.ckpt',
     ):
-        checkpoint = {
-            "state_dict": {name: param for name, param in
-                           self.model.fusion_transformer.state_dict().items()}
-        }
-        torch.save(checkpoint, os.path.join("./", "pretrained.ckpt"))
-        s3 = boto3.resource('s3')
-        s3.Bucket('automl-benchmark-bingzzhu').upload_file('./pretrained.ckpt', 'ec2/2022_09_14/cross_table_pretrain/pretrained_hogwild.ckpt')
-        return
+        while True:
+            try:
+                checkpoint = {
+                    "state_dict": {name: param for name, param in
+                                   self.model.fusion_transformer.state_dict().items()}
+                }
+                torch.save(checkpoint, os.path.join("./", "pretrained.ckpt"))
+                s3 = boto3.resource('s3')
+                s3.Bucket('automl-benchmark-bingzzhu').upload_file('./pretrained.ckpt', target)
+                break
+            except:
+                time.sleep(5)
 
     def _load_s3(
         self,
     ):
-        try:
-            s3 = boto3.resource('s3')
-            s3.Bucket('automl-benchmark-bingzzhu').download_file(
-                'ec2/2022_09_14/cross_table_pretrain/pretrained_hogwild.ckpt',
-                './pretrained.ckpt'
-            )
-            pretrain_path = os.path.join("./", 'pretrained.ckpt')
-            state_dict = torch.load(pretrain_path, map_location=torch.device("cuda"))["state_dict"]
-            print("successfully loaded backbone from s3.")
-        except:
-            state_dict = None
-            print("Loading not successful, training from scratch.")
+        while True:
+            try:
+                s3 = boto3.resource('s3')
+                s3.Bucket('automl-benchmark-bingzzhu').download_file(
+                    'ec2/2022_09_14/cross_table_pretrain/pretrained_hogwild.ckpt',
+                    './pretrained.ckpt'
+                )
+                pretrain_path = os.path.join("./", 'pretrained.ckpt')
+                state_dict = torch.load(pretrain_path, map_location=torch.device("cuda"))["state_dict"]
+                print("loaded ckpts from s3 successfully")
+                break
+            except:
+                time.sleep(5)
         return state_dict
 
     def _on_train_start(self):
         state_dict = self._load_s3()
-        while state_dict is None:
-            state_dict = self._load_s3()
         if self.prev_state_dic is None:
             self.prev_state_dic = state_dict
         if state_dict is None:
@@ -279,6 +285,39 @@ class LitModule(pl.LightningModule):
         ), f"Load model failed, unexpected keys {load_result.unexpected_keys.__str__()}"
         return model
 
+    def _process_lock(self):
+        keep_waiting = True
+        while keep_waiting:
+            try:
+                print("waiting for sync")
+                s3 = boto3.resource('s3')
+                s3.Bucket('automl-benchmark-bingzzhu').download_file(
+                    'ec2/2022_09_14/cross_table_pretrain/job_status.txt',
+                    './job_status.txt'
+                )
+
+                with open('./job_status.txt', 'r') as json_file:
+                    job_status = json.load(json_file)
+
+                if len(job_status) < self.is_pretrain["num_tasks"]:
+                    continue
+
+                job_status[self.is_pretrain["name"]] = self.current_iter
+                with open('./job_status.txt', 'w') as fp:
+                    fp.write(json.dumps(job_status))
+                s3.Bucket('automl-benchmark-bingzzhu').upload_file('./job_status.txt',
+                                                                   'ec2/2022_09_14/cross_table_pretrain/job_status.txt')
+                keep_waiting = False
+                for job in job_status:
+                    if job_status[job] == self.current_iter or job_status[job] == -1:
+                        continue
+                    else:
+                        keep_waiting = True
+            except:
+                pass
+            time.sleep(5)
+        return
+
     def training_step(self, batch, batch_idx):
         """
         Per training step. This function is registered by pl.LightningModule.
@@ -298,12 +337,19 @@ class LitModule(pl.LightningModule):
         -------
         Average loss of the mini-batch data.
         """
-        if self.is_pretrain:
-            if self.current_iter == self.upload_per_n_iter:
+        if self.is_pretrain["is_pretrain"]:
+            if self.current_iter % self.upload_per_n_iter == 0:
+                self._process_lock()
                 self._on_train_start()
-                self.current_iter = 0
-            else:
-                self.current_iter += 1
+
+            if self.current_iter % self.is_pretrain["iter_per_save"] == 0:
+                self._save_s3(target='ec2/2022_09_14/cross_table_pretrain/raw_hog/pretrained_' + str(self.current_iter) + '.ckpt')
+
+            if self.current_iter >= self.is_pretrain["max_iter"]:
+                raise Exception("Pretraining reached max iteration")
+
+            self.current_iter += 1
+
         output, loss = self._shared_step(batch)
         self.log("train_loss", loss)
         return loss

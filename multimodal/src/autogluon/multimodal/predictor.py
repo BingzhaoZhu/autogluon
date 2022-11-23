@@ -1176,18 +1176,47 @@ class MultiModalPredictor:
         else:  # continuing training
             model = self._model
 
-        s3 = boto3.client('s3')
-        try:
-            s3.head_object(Bucket='automl-benchmark-bingzzhu', Key='ec2/2022_09_14/cross_table_pretrain/pretrained_hogwild.ckpt')
-        except:
-            checkpoint = {
-                "state_dict": {name: param for name, param in
-                               model.fusion_transformer.state_dict().items()}
-            }
-            torch.save(checkpoint, os.path.join("./", "pretrained.ckpt"))
+        if is_pretrain["is_pretrain"]:
+            s3 = boto3.client('s3')
+            try:
+                s3.head_object(Bucket='automl-benchmark-bingzzhu', Key='ec2/2022_09_14/cross_table_pretrain/pretrained_hogwild.ckpt')
+            except:
+                checkpoint = {
+                    "state_dict": {name: param for name, param in
+                                   model.fusion_transformer.state_dict().items()}
+                }
+                torch.save(checkpoint, os.path.join("./", "pretrained.ckpt"))
+                s3.Bucket('automl-benchmark-bingzzhu').upload_file('./pretrained.ckpt',
+                                                                   'ec2/2022_09_14/cross_table_pretrain/pretrained_hogwild.ckpt')
+
+            try:
+                s3 = boto3.client('s3')
+                s3.Bucket('automl-benchmark-bingzzhu').download_file(
+                    'ec2/2022_09_14/cross_table_pretrain/job_status.txt',
+                    './job_status.txt'
+                )
+                with open('./job_status.txt', 'r') as json_file:
+                    job_status = json.load(json_file)
+                job_status[is_pretrain["name"]] = 0
+            except:
+                job_status = {is_pretrain["name"]: 0}
+
+            with open('./job_status.txt', 'w') as fp:
+                fp.write(json.dumps(job_status))
             s3 = boto3.resource('s3')
-            s3.Bucket('automl-benchmark-bingzzhu').upload_file('./pretrained.ckpt',
-                                                               'ec2/2022_09_14/cross_table_pretrain/pretrained_hogwild.ckpt')
+            s3.Bucket('automl-benchmark-bingzzhu').upload_file('./job_status.txt',
+                                                               'ec2/2022_09_14/cross_table_pretrain/job_status.txt')
+
+        foundation_model = is_pretrain["finetune_on"] if "finetune_on" in is_pretrain else "pretrained_hogwild.ckpt"
+        s3 = boto3.resource('s3')
+        s3.Bucket('automl-benchmark-bingzzhu').download_file(
+            'ec2/2022_09_14/cross_table_pretrain/' + foundation_model,
+            './pretrained.ckpt'
+        )
+        pretrain_path = os.path.join("./", 'pretrained.ckpt')
+        state_dict = torch.load(pretrain_path, map_location=torch.device("cuda"))["state_dict"]
+        model.fusion_transformer.load_state_dict(state_dict)
+
 
         norm_param_names = get_norm_layer_param_names(model)
 
@@ -1532,11 +1561,26 @@ class MultiModalPredictor:
                 ".* in the `DataLoader` init to improve performance.*",
             )
             warnings.filterwarnings("ignore", "Checkpoint directory .* exists and is not empty.")
-            trainer.fit(
-                task,
-                datamodule=train_dm,
-                ckpt_path=ckpt_path if resume else None,  # this is to resume training that was broken accidentally
-            )
+            try:
+                trainer.fit(
+                    task,
+                    datamodule=train_dm,
+                    ckpt_path=ckpt_path if resume else None,  # this is to resume training that was broken accidentally
+                )
+            except:
+                s3 = boto3.client('s3')
+                s3.Bucket('automl-benchmark-bingzzhu').download_file(
+                    'ec2/2022_09_14/cross_table_pretrain/job_status.txt',
+                    './job_status.txt'
+                )
+                with open('./job_status.txt', 'r') as json_file:
+                    job_status = json.load(json_file)
+                job_status[is_pretrain["name"]] = -1
+                with open('./job_status.txt', 'w') as fp:
+                    fp.write(json.dumps(job_status))
+                s3.Bucket('automl-benchmark-bingzzhu').upload_file('./job_status.txt',
+                                                                   'ec2/2022_09_14/cross_table_pretrain/job_status.txt')
+
 
         if trainer.global_rank == 0:
             # We do not perform averaging checkpoint in the case of hpo for each trial
