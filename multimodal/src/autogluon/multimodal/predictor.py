@@ -1177,20 +1177,23 @@ class MultiModalPredictor:
             model = self._model
 
         if is_pretrain["is_pretrain"]:
-            s3 = boto3.client('s3')
+
             try:
+                s3 = boto3.client('s3')
                 s3.head_object(Bucket='automl-benchmark-bingzzhu', Key='ec2/2022_09_14/cross_table_pretrain/pretrained_hogwild.ckpt')
+                print("existing ckpt found")
             except:
                 checkpoint = {
                     "state_dict": {name: param for name, param in
                                    model.fusion_transformer.state_dict().items()}
                 }
                 torch.save(checkpoint, os.path.join("./", "pretrained.ckpt"))
+                s3 = boto3.resource('s3')
                 s3.Bucket('automl-benchmark-bingzzhu').upload_file('./pretrained.ckpt',
                                                                    'ec2/2022_09_14/cross_table_pretrain/pretrained_hogwild.ckpt')
 
             try:
-                s3 = boto3.client('s3')
+                s3 = boto3.resource('s3')
                 s3.Bucket('automl-benchmark-bingzzhu').download_file(
                     'ec2/2022_09_14/cross_table_pretrain/job_status.txt',
                     './job_status.txt'
@@ -1568,7 +1571,7 @@ class MultiModalPredictor:
                     ckpt_path=ckpt_path if resume else None,  # this is to resume training that was broken accidentally
                 )
             except:
-                s3 = boto3.client('s3')
+                s3 = boto3.resource('s3')
                 s3.Bucket('automl-benchmark-bingzzhu').download_file(
                     'ec2/2022_09_14/cross_table_pretrain/job_status.txt',
                     './job_status.txt'
