@@ -1192,23 +1192,25 @@ class MultiModalPredictor:
                 s3.Bucket('automl-benchmark-bingzzhu').upload_file('./pretrained.ckpt',
                                                                    'ec2/2022_09_14/cross_table_pretrain/pretrained_hogwild.ckpt')
 
-            try:
+            while True:
+                try:
+                    s3 = boto3.resource('s3')
+                    s3.Bucket('automl-benchmark-bingzzhu').download_file(
+                        'ec2/2022_09_14/cross_table_pretrain/job_status.txt',
+                        './job_status.txt'
+                    )
+                    with open('./job_status.txt', 'r') as json_file:
+                        job_status = json.load(json_file)
+                    job_status[is_pretrain["name"]] = 0
+                    break
+                except:
+                    job_status = {is_pretrain["name"]: 0}
+                
+                with open('./job_status.txt', 'w') as fp:
+                    fp.write(json.dumps(job_status))
                 s3 = boto3.resource('s3')
-                s3.Bucket('automl-benchmark-bingzzhu').download_file(
-                    'ec2/2022_09_14/cross_table_pretrain/job_status.txt',
-                    './job_status.txt'
-                )
-                with open('./job_status.txt', 'r') as json_file:
-                    job_status = json.load(json_file)
-                job_status[is_pretrain["name"]] = 0
-            except:
-                job_status = {is_pretrain["name"]: 0}
-
-            with open('./job_status.txt', 'w') as fp:
-                fp.write(json.dumps(job_status))
-            s3 = boto3.resource('s3')
-            s3.Bucket('automl-benchmark-bingzzhu').upload_file('./job_status.txt',
-                                                               'ec2/2022_09_14/cross_table_pretrain/job_status.txt')
+                s3.Bucket('automl-benchmark-bingzzhu').upload_file('./job_status.txt',
+                                                                   'ec2/2022_09_14/cross_table_pretrain/job_status.txt')
 
         foundation_model = is_pretrain["finetune_on"] if "finetune_on" in is_pretrain else "pretrained_hogwild.ckpt"
         s3 = boto3.resource('s3')
