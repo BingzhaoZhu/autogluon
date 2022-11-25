@@ -1210,6 +1210,7 @@ class MultiModalPredictor:
                 s3 = boto3.resource('s3')
                 s3.Bucket('automl-benchmark-bingzzhu').upload_file('./job_status.txt',
                                                                    'ec2/2022_09_14/cross_table_pretrain/job_status.txt')
+                time.sleep(5)
                 try:
                     s3 = boto3.client('s3')
                     s3.head_object(Bucket='automl-benchmark-bingzzhu',
@@ -1217,7 +1218,6 @@ class MultiModalPredictor:
                     break
                 except:
                     pass
-                time.sleep(5)
 
         foundation_model = is_pretrain["finetune_on"] if "finetune_on" in is_pretrain else "pretrained_hogwild.ckpt"
         s3 = boto3.resource('s3')
