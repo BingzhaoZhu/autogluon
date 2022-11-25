@@ -299,20 +299,17 @@ class LitModule(pl.LightningModule):
                 with open('./job_status.txt', 'r') as json_file:
                     job_status = json.load(json_file)
 
-                if len(job_status) < self.is_pretrain["num_tasks"]:
-                    continue
-
                 job_status[self.is_pretrain["name"]] = self.current_iter
                 with open('./job_status.txt', 'w') as fp:
                     fp.write(json.dumps(job_status))
                 s3.Bucket('automl-benchmark-bingzzhu').upload_file('./job_status.txt',
                                                                    'ec2/2022_09_14/cross_table_pretrain/job_status.txt')
-                keep_waiting = False
+                num_of_waiting_tasks = 0
                 for job in job_status:
                     if job_status[job] == self.current_iter or job_status[job] == -1:
-                        continue
-                    else:
-                        keep_waiting = True
+                        num_of_waiting_tasks += 1
+                if num_of_waiting_tasks >= self.is_pretrain["num_tasks"]:
+                    keep_waiting = False
             except:
                 pass
             time.sleep(5)
