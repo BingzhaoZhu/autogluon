@@ -310,13 +310,13 @@ class LitModule(pl.LightningModule):
                                                                    'ec2/2022_09_14/cross_table_pretrain/job_status.txt')
                 num_of_waiting_tasks = 0
                 for job in job_status:
-                    if job_status[job] == self.current_iter or job_status[job] == -1:
+                    if job_status[job] >= self.current_iter or job_status[job] == -1:
                         num_of_waiting_tasks += 1
                 if num_of_waiting_tasks >= self.is_pretrain["num_tasks"]:
                     keep_waiting = False
             except:
                 pass
-            # time.sleep(5)
+            time.sleep(5)
         return
 
     def training_step(self, batch, batch_idx):
