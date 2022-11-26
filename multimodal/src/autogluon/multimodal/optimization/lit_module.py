@@ -245,6 +245,7 @@ class LitModule(pl.LightningModule):
         return state_dict
 
     def _on_train_start(self):
+        print("loading ckpts from s3")
         state_dict = self._load_s3()
         if self.prev_state_dic is None:
             self.prev_state_dic = state_dict
@@ -256,6 +257,7 @@ class LitModule(pl.LightningModule):
                 current_state_dic[name] = current_state_dic[name]-self.prev_state_dic[name]+state_dict[name]
         self.model.fusion_transformer.load_state_dict(current_state_dic)
         self.prev_state_dic = current_state_dic
+        print("saving ckpts to s3")
         self._save_s3()
 
     def _shared_step(
@@ -314,7 +316,7 @@ class LitModule(pl.LightningModule):
                     keep_waiting = False
             except:
                 pass
-            time.sleep(5)
+            # time.sleep(5)
         return
 
     def training_step(self, batch, batch_idx):
