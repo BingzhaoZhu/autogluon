@@ -1554,7 +1554,7 @@ class MultiModalPredictor:
                 ),
                 accumulate_grad_batches=grad_steps,
                 log_every_n_steps=OmegaConf.select(config, "optimization.log_every_n_steps", default=10),
-                enable_progress_bar=False if is_pretrain else enable_progress_bar,
+                enable_progress_bar=True, #False if is_pretrain else enable_progress_bar,
                 fast_dev_run=config.env.fast_dev_run,
                 track_grad_norm=OmegaConf.select(config, "optimization.track_grad_norm", default=-1),
                 val_check_interval=config.optimization.val_check_interval,

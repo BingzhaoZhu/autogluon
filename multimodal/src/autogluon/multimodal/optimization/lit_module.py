@@ -222,7 +222,8 @@ class LitModule(pl.LightningModule):
                 s3.Bucket('automl-benchmark-bingzzhu').upload_file('./pretrained.ckpt', target)
                 break
             except:
-                time.sleep(5)
+                pass
+                # time.sleep(5)
 
     def _load_s3(
         self,
@@ -239,7 +240,8 @@ class LitModule(pl.LightningModule):
                 print("loaded ckpts from s3 successfully")
                 break
             except:
-                time.sleep(5)
+                pass
+                # time.sleep(5)
         return state_dict
 
     def _on_train_start(self):
