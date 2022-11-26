@@ -1191,7 +1191,7 @@ class MultiModalPredictor:
                 s3 = boto3.resource('s3')
                 s3.Bucket('automl-benchmark-bingzzhu').upload_file('./pretrained.ckpt',
                                                                    'ec2/2022_09_14/cross_table_pretrain/pretrained_hogwild.ckpt')
-
+            time.sleep(10)
             while True:
                 try:
                     s3 = boto3.resource('s3')
@@ -1202,20 +1202,25 @@ class MultiModalPredictor:
                     with open('./job_status.txt', 'r') as json_file:
                         job_status = json.load(json_file)
                     job_status[is_pretrain["name"]] = 0
-                except:
-                    job_status = {is_pretrain["name"]: 0}
 
-                with open('./job_status.txt', 'w') as fp:
-                    fp.write(json.dumps(job_status))
-                s3 = boto3.resource('s3')
-                s3.Bucket('automl-benchmark-bingzzhu').upload_file('./job_status.txt',
-                                                                   'ec2/2022_09_14/cross_table_pretrain/job_status.txt')
-                time.sleep(5)
+                    with open('./job_status.txt', 'w') as fp:
+                        fp.write(json.dumps(job_status))
+                    s3 = boto3.resource('s3')
+                    s3.Bucket('automl-benchmark-bingzzhu').upload_file('./job_status.txt',
+                                                                       'ec2/2022_09_14/cross_table_pretrain/job_status.txt')
+                except:
+                    pass
+
                 try:
-                    s3 = boto3.client('s3')
-                    s3.head_object(Bucket='automl-benchmark-bingzzhu',
-                                   Key='ec2/2022_09_14/cross_table_pretrain/pretrained_hogwild.ckpt')
-                    break
+                    s3 = boto3.resource('s3')
+                    s3.Bucket('automl-benchmark-bingzzhu').download_file(
+                        'ec2/2022_09_14/cross_table_pretrain/job_status.txt',
+                        './job_status.txt'
+                    )
+                    with open('./job_status.txt', 'r') as json_file:
+                        job_status = json.load(json_file)
+                    if is_pretrain["name"] in job_status:
+                        break
                 except:
                     pass
 
