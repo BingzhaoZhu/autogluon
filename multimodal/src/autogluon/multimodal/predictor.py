@@ -1211,6 +1211,8 @@ class MultiModalPredictor:
                 except:
                     pass
 
+                time.sleep(10)
+
                 try:
                     s3 = boto3.resource('s3')
                     s3.Bucket('automl-benchmark-bingzzhu').download_file(
@@ -1585,18 +1587,37 @@ class MultiModalPredictor:
                     ckpt_path=ckpt_path if resume else None,  # this is to resume training that was broken accidentally
                 )
             except:
-                s3 = boto3.resource('s3')
-                s3.Bucket('automl-benchmark-bingzzhu').download_file(
-                    'ec2/2022_09_14/cross_table_pretrain/job_status.txt',
-                    './job_status.txt'
-                )
-                with open('./job_status.txt', 'r') as json_file:
-                    job_status = json.load(json_file)
-                job_status[is_pretrain["name"]] = -1
-                with open('./job_status.txt', 'w') as fp:
-                    fp.write(json.dumps(job_status))
-                s3.Bucket('automl-benchmark-bingzzhu').upload_file('./job_status.txt',
-                                                                   'ec2/2022_09_14/cross_table_pretrain/job_status.txt')
+                while True:
+                    try:
+                        s3 = boto3.resource('s3')
+                        s3.Bucket('automl-benchmark-bingzzhu').download_file(
+                            'ec2/2022_09_14/cross_table_pretrain/job_status.txt',
+                            './job_status.txt'
+                        )
+                        with open('./job_status.txt', 'r') as json_file:
+                            job_status = json.load(json_file)
+                        job_status[is_pretrain["name"]] = -1
+                        with open('./job_status.txt', 'w') as fp:
+                            fp.write(json.dumps(job_status))
+                        s3.Bucket('automl-benchmark-bingzzhu').upload_file('./job_status.txt',
+                                                                           'ec2/2022_09_14/cross_table_pretrain/job_status.txt')
+                    except:
+                        pass
+
+                    time.sleep(10)
+
+                    try:
+                        s3 = boto3.resource('s3')
+                        s3.Bucket('automl-benchmark-bingzzhu').download_file(
+                            'ec2/2022_09_14/cross_table_pretrain/job_status.txt',
+                            './job_status.txt'
+                        )
+                        with open('./job_status.txt', 'r') as json_file:
+                            job_status = json.load(json_file)
+                        if is_pretrain["name"] in job_status and job_status[is_pretrain["name"]] == -1:
+                            break
+                    except:
+                        pass
 
 
         if trainer.global_rank == 0:
