@@ -324,7 +324,7 @@ class LitModule(pl.LightningModule):
             s3 = boto3.resource("s3")
             s3_bucket = s3.Bucket(bucket)
             files_in_s3 = [f.key.split(folder+"/")[1] for f in s3_bucket.objects.filter(Prefix=folder).all()]
-            if len(files_in_s3) < self.is_pretrain["num_tasks"]:
+            if len(files_in_s3) - 1 < self.is_pretrain["num_tasks"]:
                 continue
             print(files_in_s3)
             keep_waiting = False
