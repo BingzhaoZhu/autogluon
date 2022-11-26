@@ -337,7 +337,6 @@ class LitModule(pl.LightningModule):
                 else:
                     keep_waiting = True
                     break
-            break
         return
 
     def training_step(self, batch, batch_idx):
