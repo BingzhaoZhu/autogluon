@@ -294,29 +294,50 @@ class LitModule(pl.LightningModule):
         while keep_waiting:
             try:
                 print("waiting for sync")
-                s3 = boto3.resource('s3')
-                s3.Bucket('automl-benchmark-bingzzhu').download_file(
-                    'ec2/2022_09_14/cross_table_pretrain/job_status.txt',
-                    './job_status.txt'
-                )
 
-                with open('./job_status.txt', 'r') as json_file:
-                    job_status = json.load(json_file)
-
-                job_status[self.is_pretrain["name"]] = self.current_iter
-                with open('./job_status.txt', 'w') as fp:
-                    fp.write(json.dumps(job_status))
-                s3.Bucket('automl-benchmark-bingzzhu').upload_file('./job_status.txt',
-                                                                   'ec2/2022_09_14/cross_table_pretrain/job_status.txt')
-                num_of_waiting_tasks = 0
-                for job in job_status:
-                    if job_status[job] >= self.current_iter or job_status[job] == -1:
-                        num_of_waiting_tasks += 1
-                if num_of_waiting_tasks >= self.is_pretrain["num_tasks"]:
-                    keep_waiting = False
+                s3_client = boto3.client('s3')
+                response = s3_client.list_objects_v2(Bucket='automl-benchmark-bingzzhu',
+                                                     Prefix='ec2/2022_09_14/cross_table_pretrain/job_status/' + self.is_pretrain["name"]
+                                                     )
+                for object in response['Contents']:
+                    print('Deleting', object['Key'])
+                    s3_client.delete_object(Bucket='automl-benchmark-bingzzhu', Key=object['Key'])
             except:
                 pass
-            time.sleep(5)
+
+            try:
+                job_status = {}
+                with open('./job_status', 'w') as fp:
+                    fp.write(json.dumps(job_status))
+                print("writing to s3")
+                s3 = boto3.resource('s3')
+                s3.Bucket('automl-benchmark-bingzzhu').upload_file('./job_status',
+                                                                   'ec2/2022_09_14/cross_table_pretrain/job_status/' +
+                                                                   self.is_pretrain["name"] + "_iter_" + str(self.current_iter))
+                break
+            except:
+                pass
+
+        while keep_waiting:
+            bucket = 'automl-benchmark-bingzzhu'
+            folder = 'ec2/2022_09_14/cross_table_pretrain/job_status'
+            s3 = boto3.resource("s3")
+            s3_bucket = s3.Bucket(bucket)
+            files_in_s3 = [f.key.split(folder+"/")[1] for f in s3_bucket.objects.filter(Prefix=folder).all()]
+            if len(files_in_s3) < self.is_pretrain["num_tasks"]:
+                continue
+            print(files_in_s3)
+            keep_waiting = False
+            for file_name in files_in_s3:
+                if len(file_name) == 0:
+                    continue
+                n_iter = int(file_name.split("_")[-1])
+                if n_iter == -1 or n_iter >= self.current_iter:
+                    pass
+                else:
+                    keep_waiting = True
+                    break
+            break
         return
 
     def training_step(self, batch, batch_idx):
