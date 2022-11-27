@@ -297,7 +297,8 @@ class LitModule(pl.LightningModule):
 
                 s3_client = boto3.client('s3')
                 response = s3_client.list_objects_v2(Bucket='automl-benchmark-bingzzhu',
-                                                     Prefix='ec2/2022_09_14/cross_table_pretrain/job_status/' + self.is_pretrain["name"]
+                                                     Prefix='ec2/2022_09_14/cross_table_pretrain/job_status/'
+                                                            + self.is_pretrain["name"] + "_iter_"
                                                      )
                 for object in response['Contents']:
                     print('Deleting', object['Key'])
