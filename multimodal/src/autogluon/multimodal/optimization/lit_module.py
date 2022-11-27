@@ -20,54 +20,6 @@ from .utils import apply_layerwise_lr_decay, apply_single_lr, apply_two_stages_l
 
 logger = logging.getLogger(AUTOMM)
 
-
-def get_file_folders(s3_client, bucket_name, prefix=""):
-    file_names = []
-    folders = []
-
-    default_kwargs = {
-        "Bucket": bucket_name,
-        "Prefix": prefix
-    }
-    next_token = ""
-
-    while next_token is not None:
-        updated_kwargs = default_kwargs.copy()
-        if next_token != "":
-            updated_kwargs["ContinuationToken"] = next_token
-
-        response = s3_client.list_objects_v2(**updated_kwargs)
-        contents = response.get("Contents")
-
-        for result in contents:
-            key = result.get("Key")
-            if key[-1] == "/":
-                folders.append(key)
-            else:
-                file_names.append(key)
-
-        next_token = response.get("NextContinuationToken")
-
-    return file_names, folders
-
-
-def download_files(s3_client, bucket_name, local_path, file_names, folders):
-    local_path = Path(local_path)
-
-    for folder in folders:
-        folder_path = Path.joinpath(local_path, folder)
-        folder_path.mkdir(parents=True, exist_ok=True)
-
-    for file_name in file_names:
-        file_path = Path.joinpath(local_path, file_name)
-
-        file_path.parent.mkdir(parents=True, exist_ok=True)
-        s3_client.download_file(
-            bucket_name,
-            file_name,
-            str(file_path)
-        )
-
 class LitModule(pl.LightningModule):
     """
     Control the loops for training, evaluation, and prediction. This module is independent of
@@ -358,8 +310,8 @@ class LitModule(pl.LightningModule):
             s3_client = boto3.client('s3')
             BUCKET = 'automl-benchmark-bingzzhu'
             PREFIX = 'ec2/2022_09_14/cross_table_pretrain/job_status'
-            file_names, folders = get_file_folders(s3_client, BUCKET, PREFIX)
-            download_files(
+            file_names, folders = self.get_file_folders(s3_client, BUCKET, PREFIX)
+            self.download_files(
                 s3_client,
                 BUCKET,
                 "./",
@@ -371,7 +323,6 @@ class LitModule(pl.LightningModule):
             summary = {}
             if len(files) < self.is_pretrain["num_tasks"]:
                 continue
-            print(files)
 
             keep_waiting = False
             for file_name in files:
@@ -385,7 +336,7 @@ class LitModule(pl.LightningModule):
                     keep_waiting = True
                     break
         try:
-            print("uploading summary")
+            print(summary)
             with open('./job_status', 'w') as fp:
                 fp.write(json.dumps(summary))
             print("writing to s3")
@@ -397,6 +348,52 @@ class LitModule(pl.LightningModule):
             pass
 
         return
+
+    def get_file_folders(self, s3_client, bucket_name, prefix=""):
+        file_names = []
+        folders = []
+
+        default_kwargs = {
+            "Bucket": bucket_name,
+            "Prefix": prefix
+        }
+        next_token = ""
+
+        while next_token is not None:
+            updated_kwargs = default_kwargs.copy()
+            if next_token != "":
+                updated_kwargs["ContinuationToken"] = next_token
+
+            response = s3_client.list_objects_v2(**updated_kwargs)
+            contents = response.get("Contents")
+
+            for result in contents:
+                key = result.get("Key")
+                if key[-1] == "/":
+                    folders.append(key)
+                else:
+                    file_names.append(key)
+
+            next_token = response.get("NextContinuationToken")
+
+        return file_names, folders
+
+    def download_files(self, s3_client, bucket_name, local_path, file_names, folders):
+        local_path = Path(local_path)
+
+        for folder in folders:
+            folder_path = Path.joinpath(local_path, folder)
+            folder_path.mkdir(parents=True, exist_ok=True)
+
+        for file_name in file_names:
+            file_path = Path.joinpath(local_path, file_name)
+
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+            s3_client.download_file(
+                bucket_name,
+                file_name,
+                str(file_path)
+            )
 
     def training_step(self, batch, batch_idx):
         """
