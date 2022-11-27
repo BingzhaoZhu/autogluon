@@ -1194,25 +1194,14 @@ class MultiModalPredictor:
 
             while True:
                 try:
-                    s3_client = boto3.client('s3')
-                    response = s3_client.list_objects_v2(Bucket='automl-benchmark-bingzzhu',
-                                                         Prefix='ec2/2022_09_14/cross_table_pretrain/job_status/' +
-                                                                is_pretrain["name"] + "_iter_"
-                                                         )
-                    for object in response['Contents']:
-                        print('Deleting', object['Key'])
-                        s3_client.delete_object(Bucket='automl-benchmark-bingzzhu', Key=object['Key'])
-                except:
-                    pass
-
-                try:
-                    job_status = {}
+                    job_status = {"current_iter": 0}
                     with open('./job_status', 'w') as fp:
                         fp.write(json.dumps(job_status))
 
                     s3 = boto3.resource('s3')
                     s3.Bucket('automl-benchmark-bingzzhu').upload_file('./job_status',
-                                                                       'ec2/2022_09_14/cross_table_pretrain/job_status/'+is_pretrain["name"]+"_iter_"+str(0))
+                                                                       'ec2/2022_09_14/cross_table_pretrain/job_status/' +
+                                                                       is_pretrain["name"])
                     break
                 except:
                     pass
@@ -1580,26 +1569,14 @@ class MultiModalPredictor:
             except:
                 while True:
                     try:
-                        s3_client = boto3.client('s3')
-                        response = s3_client.list_objects_v2(Bucket='automl-benchmark-bingzzhu',
-                                                             Prefix='ec2/2022_09_14/cross_table_pretrain/job_status/' +
-                                                                    is_pretrain["name"] + "_iter_"
-                                                             )
-                        for object in response['Contents']:
-                            print('Deleting', object['Key'])
-                            s3_client.delete_object(Bucket='automl-benchmark-bingzzhu', Key=object['Key'])
-                    except:
-                        pass
-
-                    try:
-                        job_status = {}
+                        job_status = {"current_iter": -1}
                         with open('./job_status', 'w') as fp:
                             fp.write(json.dumps(job_status))
 
                         s3 = boto3.resource('s3')
                         s3.Bucket('automl-benchmark-bingzzhu').upload_file('./job_status',
                                                                            'ec2/2022_09_14/cross_table_pretrain/job_status/' +
-                                                                           is_pretrain["name"] + "_iter_" + str(-1))
+                                                                           is_pretrain["name"])
                         break
                     except:
                         pass

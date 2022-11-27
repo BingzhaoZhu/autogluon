@@ -4,6 +4,7 @@ import boto3
 import os
 import time
 import json
+from pathlib import Path
 
 import pytorch_lightning as pl
 import torch
@@ -19,6 +20,53 @@ from .utils import apply_layerwise_lr_decay, apply_single_lr, apply_two_stages_l
 
 logger = logging.getLogger(AUTOMM)
 
+
+def get_file_folders(s3_client, bucket_name, prefix=""):
+    file_names = []
+    folders = []
+
+    default_kwargs = {
+        "Bucket": bucket_name,
+        "Prefix": prefix
+    }
+    next_token = ""
+
+    while next_token is not None:
+        updated_kwargs = default_kwargs.copy()
+        if next_token != "":
+            updated_kwargs["ContinuationToken"] = next_token
+
+        response = s3_client.list_objects_v2(**updated_kwargs)
+        contents = response.get("Contents")
+
+        for result in contents:
+            key = result.get("Key")
+            if key[-1] == "/":
+                folders.append(key)
+            else:
+                file_names.append(key)
+
+        next_token = response.get("NextContinuationToken")
+
+    return file_names, folders
+
+
+def download_files(s3_client, bucket_name, local_path, file_names, folders):
+    local_path = Path(local_path)
+
+    for folder in folders:
+        folder_path = Path.joinpath(local_path, folder)
+        folder_path.mkdir(parents=True, exist_ok=True)
+
+    for file_name in file_names:
+        file_path = Path.joinpath(local_path, file_name)
+
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        s3_client.download_file(
+            bucket_name,
+            file_name,
+            str(file_path)
+        )
 
 class LitModule(pl.LightningModule):
     """
@@ -294,50 +342,60 @@ class LitModule(pl.LightningModule):
         while keep_waiting:
             try:
                 print("waiting for sync")
-
-                s3_client = boto3.client('s3')
-                response = s3_client.list_objects_v2(Bucket='automl-benchmark-bingzzhu',
-                                                     Prefix='ec2/2022_09_14/cross_table_pretrain/job_status/'
-                                                            + self.is_pretrain["name"] + "_iter_"
-                                                     )
-                for object in response['Contents']:
-                    print('Deleting', object['Key'])
-                    s3_client.delete_object(Bucket='automl-benchmark-bingzzhu', Key=object['Key'])
-            except:
-                pass
-
-            try:
-                job_status = {}
+                job_status = {"current_iter": self.current_iter}
                 with open('./job_status', 'w') as fp:
                     fp.write(json.dumps(job_status))
                 print("writing to s3")
                 s3 = boto3.resource('s3')
                 s3.Bucket('automl-benchmark-bingzzhu').upload_file('./job_status',
                                                                    'ec2/2022_09_14/cross_table_pretrain/job_status/' +
-                                                                   self.is_pretrain["name"] + "_iter_" + str(self.current_iter))
+                                                                   self.is_pretrain["name"])
                 break
             except:
                 pass
 
         while keep_waiting:
-            bucket = 'automl-benchmark-bingzzhu'
-            folder = 'ec2/2022_09_14/cross_table_pretrain/job_status'
-            s3 = boto3.resource("s3")
-            s3_bucket = s3.Bucket(bucket)
-            files_in_s3 = [f.key.split(folder+"/")[1] for f in s3_bucket.objects.filter(Prefix=folder).all()]
-            if len(files_in_s3) - 1 < self.is_pretrain["num_tasks"]:
+            s3_client = boto3.client('s3')
+            BUCKET = 'automl-benchmark-bingzzhu'
+            PREFIX = 'ec2/2022_09_14/cross_table_pretrain/job_status'
+            file_names, folders = get_file_folders(s3_client, BUCKET, PREFIX)
+            download_files(
+                s3_client,
+                BUCKET,
+                "./",
+                file_names,
+                folders
+            )
+
+            files = os.listdir('./ec2/2022_09_14/cross_table_pretrain/job_status')
+            summary = {}
+            if len(files) < self.is_pretrain["num_tasks"]:
                 continue
-            print(files_in_s3)
+            print(files)
+
             keep_waiting = False
-            for file_name in files_in_s3:
-                if len(file_name) == 0:
-                    continue
-                n_iter = int(file_name.split("_")[-1])
+            for file_name in files:
+                with open('./ec2/2022_09_14/cross_table_pretrain/job_status/'+file_name) as json_file:
+                    per_job = json.load(json_file)
+                summary[file_name] = per_job["current_iter"]
+                n_iter = per_job["current_iter"]
                 if n_iter == -1 or n_iter >= self.current_iter:
                     pass
                 else:
                     keep_waiting = True
                     break
+        try:
+            print("uploading summary")
+            with open('./job_status', 'w') as fp:
+                fp.write(json.dumps(summary))
+            print("writing to s3")
+            s3 = boto3.resource('s3')
+            s3.Bucket('automl-benchmark-bingzzhu').upload_file('./job_status',
+                                                               'ec2/2022_09_14/cross_table_pretrain/job_status_all'
+                                                               )
+        except:
+            pass
+
         return
 
     def training_step(self, batch, batch_idx):
