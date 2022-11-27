@@ -246,6 +246,7 @@ class LitModule(pl.LightningModule):
 
     def _on_train_start(self):
         print("loading ckpts from s3")
+        torch.cuda.empty_cache()
         state_dict = self._load_s3()
         if self.prev_state_dic is None:
             self.prev_state_dic = state_dict
