@@ -134,7 +134,6 @@ class LitModule(pl.LightningModule):
         # self.freeze_backbone(freeze=True)
         self.is_pretrain = is_pretrain
         self.prev_state_dic = None
-        self.upload_per_n_iter = None if is_pretrain is None else is_pretrain["upload_per_n_iter"]
         self.current_iter = 0
 
     def _compute_template_loss(
@@ -416,7 +415,7 @@ class LitModule(pl.LightningModule):
         Average loss of the mini-batch data.
         """
         if self.is_pretrain["is_pretrain"]:
-            if self.current_iter % self.upload_per_n_iter == 0:
+            if self.current_iter % self.is_pretrain["upload_per_n_iter"] == 0:
                 self._process_lock()
                 self._on_train_start()
 
