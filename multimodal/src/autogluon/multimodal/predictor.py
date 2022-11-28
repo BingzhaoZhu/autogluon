@@ -1193,26 +1193,6 @@ class MultiModalPredictor:
                                                                    'ec2/2022_09_14/cross_table_pretrain/pretrained_hogwild.ckpt')
 
 
-
-            while True:
-                bucket = 'automl-benchmark-bingzzhu'
-                File = 'ec2/2022_09_14/cross_table_pretrain/job_status/'
-                objs = boto3.client('s3').list_objects_v2(Bucket=bucket, Prefix=File)
-                if objs['KeyCount'] - 1 >= is_pretrain["num_tasks"]:
-                    raise Exception("skipping dataset" + is_pretrain["name"])
-                try:
-                    job_status = {"current_iter": 0}
-                    with open('./job_status', 'w') as fp:
-                        fp.write(json.dumps(job_status))
-
-                    s3 = boto3.resource('s3')
-                    s3.Bucket('automl-benchmark-bingzzhu').upload_file('./job_status',
-                                                                       'ec2/2022_09_14/cross_table_pretrain/job_status/' +
-                                                                       is_pretrain["name"])
-                    break
-                except:
-                    pass
-
         foundation_model = is_pretrain["finetune_on"] if "finetune_on" in is_pretrain else "pretrained_hogwild.ckpt"
         s3 = boto3.resource('s3')
         s3.Bucket('automl-benchmark-bingzzhu').download_file(
@@ -1576,14 +1556,14 @@ class MultiModalPredictor:
             except:
                 while True:
                     try:
-                        job_status = {"current_iter": -1}
-                        with open('./job_status', 'w') as fp:
-                            fp.write(json.dumps(job_status))
-
+                        target = 'ec2/2022_09_14/cross_table_pretrain/iter_' + str(-1) + '/pretrained.ckpt'
+                        checkpoint = {
+                            "state_dict": {name: param for name, param in
+                                           self._model.fusion_transformer.state_dict().items()}
+                        }
+                        torch.save(checkpoint, os.path.join("./", "pretrained.ckpt"))
                         s3 = boto3.resource('s3')
-                        s3.Bucket('automl-benchmark-bingzzhu').upload_file('./job_status',
-                                                                           'ec2/2022_09_14/cross_table_pretrain/job_status/' +
-                                                                           is_pretrain["name"])
+                        s3.Bucket('automl-benchmark-bingzzhu').upload_file('./pretrained.ckpt', target)
                         break
                     except:
                         pass
