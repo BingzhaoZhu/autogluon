@@ -1177,31 +1177,37 @@ class MultiModalPredictor:
             model = self._model
 
         if is_pretrain["is_pretrain"]:
+            while True:
+                try:
+                    s3 = boto3.client('s3')
+                    s3.head_object(Bucket='automl-benchmark-bingzzhu', Key='ec2/2022_09_14/cross_table_pretrain/pretrained_hogwild.ckpt')
+                    print("existing ckpt found")
+                    break
+                except:
+                    checkpoint = {
+                        "state_dict": {name: param for name, param in
+                                       model.fusion_transformer.state_dict().items()}
+                    }
+                    torch.save(checkpoint, os.path.join("./", "pretrained.ckpt"))
+                    s3 = boto3.resource('s3')
+                    s3.Bucket('automl-benchmark-bingzzhu').upload_file('./pretrained.ckpt',
+                                                                       'ec2/2022_09_14/cross_table_pretrain/pretrained_hogwild.ckpt')
+                    break
 
+        while True:
             try:
-                s3 = boto3.client('s3')
-                s3.head_object(Bucket='automl-benchmark-bingzzhu', Key='ec2/2022_09_14/cross_table_pretrain/pretrained_hogwild.ckpt')
-                print("existing ckpt found")
-            except:
-                checkpoint = {
-                    "state_dict": {name: param for name, param in
-                                   model.fusion_transformer.state_dict().items()}
-                }
-                torch.save(checkpoint, os.path.join("./", "pretrained.ckpt"))
+                foundation_model = is_pretrain["finetune_on"] if "finetune_on" in is_pretrain else "pretrained_hogwild.ckpt"
                 s3 = boto3.resource('s3')
-                s3.Bucket('automl-benchmark-bingzzhu').upload_file('./pretrained.ckpt',
-                                                                   'ec2/2022_09_14/cross_table_pretrain/pretrained_hogwild.ckpt')
-
-
-        foundation_model = is_pretrain["finetune_on"] if "finetune_on" in is_pretrain else "pretrained_hogwild.ckpt"
-        s3 = boto3.resource('s3')
-        s3.Bucket('automl-benchmark-bingzzhu').download_file(
-            'ec2/2022_09_14/cross_table_pretrain/' + foundation_model,
-            './pretrained.ckpt'
-        )
-        pretrain_path = os.path.join("./", 'pretrained.ckpt')
-        state_dict = torch.load(pretrain_path, map_location=torch.device("cuda"))["state_dict"]
-        model.fusion_transformer.load_state_dict(state_dict)
+                s3.Bucket('automl-benchmark-bingzzhu').download_file(
+                    'ec2/2022_09_14/cross_table_pretrain/' + foundation_model,
+                    './pretrained.ckpt'
+                )
+                pretrain_path = os.path.join("./", 'pretrained.ckpt')
+                state_dict = torch.load(pretrain_path, map_location=torch.device("cuda"))["state_dict"]
+                model.fusion_transformer.load_state_dict(state_dict)
+                break
+            except:
+                pass
 
 
         norm_param_names = get_norm_layer_param_names(model)
@@ -1556,7 +1562,7 @@ class MultiModalPredictor:
             except:
                 while True:
                     try:
-                        target = 'ec2/2022_09_14/cross_table_pretrain/iter_' + str(-1) + '/pretrained.ckpt'
+                        target = 'ec2/2022_09_14/cross_table_pretrain/iter_' + str(-1) + '/' + is_pretrain['name'] + '.ckpt'
                         checkpoint = {
                             "state_dict": {name: param for name, param in
                                            self._model.fusion_transformer.state_dict().items()}

@@ -243,16 +243,17 @@ class LitModule(pl.LightningModule):
         self.download_files(
             s3_client,
             BUCKET,
-            "./",
+            "./"+self.is_pretrain['name']+'/',
             file_names,
             folders
         )
 
-        files = os.listdir('./ec2/2022_09_14/cross_table_pretrain/iter_' + str(self.current_iter))
+        local_path = './' + self.is_pretrain['name'] + '/' + 'ec2/2022_09_14/cross_table_pretrain/iter_'
+        files = os.listdir(local_path + str(self.current_iter))
 
         new_pretrained = copy.deepcopy(self.prev_state_dic)
         for file_name in files:
-            ckpt_path = './ec2/2022_09_14/cross_table_pretrain/iter_' + str(self.current_iter) + '/' + file_name
+            ckpt_path = local_path + str(self.current_iter) + '/' + file_name
             state_dict = torch.load(ckpt_path, map_location=torch.device("cuda"))["state_dict"]
             with torch.no_grad():
                 for name in new_pretrained:
@@ -260,7 +261,7 @@ class LitModule(pl.LightningModule):
         self.model.fusion_transformer.load_state_dict(new_pretrained)
         self._save_s3('ec2/2022_09_14/cross_table_pretrain/iter_' + str(self.current_iter) + '/pretrained.ckpt')
         self.prev_state_dic = copy.deepcopy(new_pretrained)
-        shutil.rmtree('./ec2/')
+        shutil.rmtree('./' + self.is_pretrain['name'] + '/')
 
     def _shared_step(
         self,
@@ -288,34 +289,43 @@ class LitModule(pl.LightningModule):
                 pass
 
         while keep_waiting:
-            bucket = 'automl-benchmark-bingzzhu'
-            File = 'ec2/2022_09_14/cross_table_pretrain/iter_' + str(self.current_iter) + '/'
-            objs = boto3.client('s3').list_objects_v2(Bucket=bucket, Prefix=File)
-            num_waiting = objs['KeyCount']
+            try:
+                bucket = 'automl-benchmark-bingzzhu'
+                File = 'ec2/2022_09_14/cross_table_pretrain/iter_' + str(self.current_iter) + '/'
+                objs = boto3.client('s3').list_objects_v2(Bucket=bucket, Prefix=File)
+                num_waiting = objs['KeyCount']
 
-            bucket = 'automl-benchmark-bingzzhu'
-            File = 'ec2/2022_09_14/cross_table_pretrain/iter_' + str(-1) + '/'
-            objs = boto3.client('s3').list_objects_v2(Bucket=bucket, Prefix=File)
-            num_failed = objs['KeyCount']
+                bucket = 'automl-benchmark-bingzzhu'
+                File = 'ec2/2022_09_14/cross_table_pretrain/iter_' + str(-1) + '/'
+                objs = boto3.client('s3').list_objects_v2(Bucket=bucket, Prefix=File)
+                num_failed = objs['KeyCount']
 
-            print("n_waiting:", num_waiting, "num_failed:", num_failed)
+                print("n_waiting:", num_waiting, "num_failed:", num_failed)
 
-            if num_waiting + num_failed >= self.is_pretrain["num_tasks"]:
+                if num_waiting + num_failed >= self.is_pretrain["num_tasks"]:
+                    break
+            except:
+                pass
+
+        while True:
+            try:
+                print("start global averaging")
+                s3 = boto3.resource('s3')
+                s3.Bucket('automl-benchmark-bingzzhu').download_file(
+                    'ec2/2022_09_14/cross_table_pretrain/iter_' + str(self.current_iter) + '/pretrained.ckpt',
+                    './pretrained_.ckpt'
+                )
+                pretrain_path = os.path.join("./", 'pretrained_.ckpt')
+                state_dict = torch.load(pretrain_path, map_location=torch.device("cuda"))["state_dict"]
+                self.model.fusion_transformer.load_state_dict(state_dict)
+                self.prev_state_dic = copy.deepcopy(state_dict)
+                print("found global ckpt")
                 break
-
-        try:
-            s3 = boto3.resource('s3')
-            s3.Bucket('automl-benchmark-bingzzhu').download_file(
-                'ec2/2022_09_14/cross_table_pretrain/iter_' + str(self.current_iter) + '/pretrained.ckpt',
-                './pretrained_.ckpt'
-            )
-            pretrain_path = os.path.join("./", 'pretrained_.ckpt')
-            state_dict = torch.load(pretrain_path, map_location=torch.device("cuda"))["state_dict"]
-            self.model.fusion_transformer.load_state_dict(state_dict)
-            self.prev_state_dic = copy.deepcopy(state_dict)
-        except:
-            self._save_pretrained_ckpt()
-            torch.cuda.empty_cache()
+            except:
+                print("not found global ckpt")
+                self._save_pretrained_ckpt()
+                torch.cuda.empty_cache()
+                break
 
         return
 
@@ -386,7 +396,12 @@ class LitModule(pl.LightningModule):
         """
         if self.is_pretrain["is_pretrain"]:
             if self.current_iter % self.is_pretrain["upload_per_n_iter"] == 0:
-                self._process_lock()
+                while True:
+                    try:
+                        self._process_lock()
+                        break
+                    except:
+                        pass
 
             if self.current_iter % self.is_pretrain["iter_per_save"] == 0:
                 self._save_s3(target='ec2/2022_09_14/cross_table_pretrain/raw_hog/pretrained_' + str(self.current_iter) + '.ckpt')
