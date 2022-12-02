@@ -331,6 +331,36 @@ class MultimodalFusionTransformer(nn.Module):
 
         assert len(self.adapter) == len(self.model)
 
+        # import json
+        # filename = "backbones/FTTx3"
+        # backbone_hparam = dict(
+        #     d_token=in_features,
+        #     n_blocks=n_blocks,
+        #     attention_n_heads=attention_n_heads,
+        #     attention_dropout=attention_dropout,
+        #     attention_initialization=attention_initialization,
+        #     attention_normalization=attention_normalization,
+        #     ffn_d_hidden=ffn_d_hidden,
+        #     ffn_dropout=ffn_dropout,
+        #     ffn_activation=ffn_activation,
+        #     ffn_normalization=ffn_normalization,
+        #     residual_dropout=residual_dropout,
+        #     prenormalization=prenormalization,
+        #     first_prenormalization=first_prenormalization,
+        #     last_layer_query_idx=None,
+        #     n_tokens=None,
+        #     kv_compression_ratio=kv_compression_ratio,
+        #     kv_compression_sharing=kv_compression_sharing,
+        #     head_activation=head_activation,
+        #     head_normalization=head_normalization,
+        #     d_out=hidden_features,
+        #     projection=False,
+        #     additive_attention=additive_attention,
+        #     share_qv_weights=share_qv_weights,
+        # )
+        # with open(filename, 'w') as f:
+        #     f.write(json.dumps(backbone_hparam))
+
         self.fusion_transformer = FT_Transformer(
             d_token=in_features,
             n_blocks=n_blocks,

@@ -1176,25 +1176,9 @@ class MultiModalPredictor:
         else:  # continuing training
             model = self._model
 
-        if is_pretrain["is_pretrain"]:
-            while True:
-                try:
-                    s3 = boto3.client('s3')
-                    s3.head_object(Bucket='automl-benchmark-bingzzhu', Key='ec2/2022_09_14/cross_table_pretrain/pretrained_hogwild.ckpt')
-                    print("existing ckpt found")
-                    break
-                except:
-                    checkpoint = {
-                        "state_dict": {name: param for name, param in
-                                       model.fusion_transformer.state_dict().items()}
-                    }
-                    torch.save(checkpoint, os.path.join("./", "pretrained.ckpt"))
-                    s3 = boto3.resource('s3')
-                    s3.Bucket('automl-benchmark-bingzzhu').upload_file('./pretrained.ckpt',
-                                                                       'ec2/2022_09_14/cross_table_pretrain/pretrained_hogwild.ckpt')
-                    break
-
         while True:
+            if (not is_pretrain["is_pretrain"]) and ("finetune_on" not in is_pretrain):
+                break
             try:
                 foundation_model = is_pretrain["finetune_on"] if "finetune_on" in is_pretrain else "pretrained_hogwild.ckpt"
                 s3 = boto3.resource('s3')
@@ -1534,7 +1518,7 @@ class MultiModalPredictor:
                 ),
                 accumulate_grad_batches=grad_steps,
                 log_every_n_steps=OmegaConf.select(config, "optimization.log_every_n_steps", default=10),
-                enable_progress_bar=True, #False if is_pretrain else enable_progress_bar,
+                enable_progress_bar=enable_progress_bar, #False if is_pretrain else enable_progress_bar,
                 fast_dev_run=config.env.fast_dev_run,
                 track_grad_norm=OmegaConf.select(config, "optimization.track_grad_norm", default=-1),
                 val_check_interval=config.optimization.val_check_interval,
