@@ -356,7 +356,7 @@ class MultiModalPredictor:
         seed: Optional[int] = 123,
         standalone: Optional[bool] = True,
         hyperparameter_tune_kwargs: Optional[dict] = None,
-        is_pretrain=False,
+        pretrain_kwargs=None,
     ):
         """
         Fit MultiModalPredictor predict label column of a dataframe based on the other columns,
@@ -625,7 +625,7 @@ class MultiModalPredictor:
             teacher_predictor=teacher_predictor,
             standalone=standalone,
             hpo_mode=(hyperparameter_tune_kwargs is not None),  # skip average checkpoint if in hpo mode
-            is_pretrain_=is_pretrain,
+            pretrain_kwargs=pretrain_kwargs,
         )
 
         if hyperparameter_tune_kwargs is not None:
@@ -901,16 +901,17 @@ class MultiModalPredictor:
         teacher_predictor: Union[str, MultiModalPredictor] = None,
         hpo_mode: bool = False,
         standalone: bool = True,
-        is_pretrain_=False,
+        pretrain_kwargs=None,
         **hpo_kwargs,
     ):
-        print("----------fitting---------------", is_pretrain_)
+        print("pretrain_kwargs:", pretrain_kwargs)
 
         if self._config is not None:  # continuous training
             config = self._config
 
         is_pretrain = hyperparameters.pop("pretrainer") if "pretrainer" in hyperparameters else False
         finetune_on = hyperparameters.pop("finetune_on") if "finetune_on" in hyperparameters else None
+        pretrain_kwargs = {"is_pretrain": False} if pretrain_kwargs is None else pretrain_kwargs
 
         extra = []
         if teacher_predictor is not None:
@@ -963,20 +964,27 @@ class MultiModalPredictor:
             try:
                 if finetune_on is not None:
                     foundation_model = finetune_on
-                    s3 = boto3.resource('s3')
-                    s3.Bucket('automl-benchmark-bingzzhu').download_file(
-                        'ec2/2022_09_14/cross_table_pretrain/' + foundation_model,
-                        './pretrained.ckpt'
-                    )
-                    pretrain_path = os.path.join("./", 'pretrained.ckpt')
-                    state_dict = torch.load(pretrain_path, map_location=torch.device("cuda"))["state_dict"]
-                    model.fusion_transformer.load_state_dict(state_dict)
+                    if pretrain_kwargs is not None and 'bucket_name' in  pretrain_kwargs:
+                        s3 = boto3.resource('s3')
+                        s3.Bucket(pretrain_kwargs['bucket_name']).download_file(
+                            foundation_model,
+                            './pretrained.ckpt'
+                        )
+                        pretrain_path = os.path.join("./", 'pretrained.ckpt')
+                    else:
+                        pretrain_path = foundation_model
+                    if os.path.isfile(pretrain_path):
+                        state_dict = torch.load(pretrain_path, map_location=torch.device("cuda"))["state_dict"]
+                        model.fusion_transformer.load_state_dict(state_dict)
+                    else:
+                        print(f"Checkpoint {finetune_on} not exist. Training from scratch...")
+                        break
                 break
             except:
                 pass
 
-        if "few_shot" in is_pretrain_:
-            n = is_pretrain_["few_shot"]
+        if pretrain_kwargs is not None and "few_shot" in pretrain_kwargs:
+            n = pretrain_kwargs["few_shot"]
             if isinstance(n, int):
                 train_n = min(n, len(train_df.index))
                 train_df = train_df.sample(n=train_n, random_state=1)
@@ -1189,7 +1197,7 @@ class MultiModalPredictor:
                 decay_loss_coefficient=config.pretrainer.decay_pretrain_coefficient,
                 pretrain_objective=config.pretrainer.objective,
                 temperature=config.pretrainer.temperature,
-                is_pretrain=is_pretrain_,
+                pretrain_kwargs=pretrain_kwargs,
                 **metrics_kwargs,
                 **optimization_kwargs,
             )
@@ -1351,7 +1359,7 @@ class MultiModalPredictor:
                 ".* in the `DataLoader` init to improve performance.*",
             )
             warnings.filterwarnings("ignore", "Checkpoint directory .* exists and is not empty.")
-            if not is_pretrain_["is_pretrain"]:
+            if pretrain_kwargs is not None and not pretrain_kwargs["is_pretrain"]:
                 trainer.fit(
                     task,
                     datamodule=train_dm,
@@ -1369,15 +1377,14 @@ class MultiModalPredictor:
 
                 while True:
                     try:
-                        target = 'ec2/2022_09_14/cross_table_pretrain/' + is_pretrain_["folder_name"] + '/iter_' + str(-1) + '/' + is_pretrain_[
-                            'name'] + '.ckpt'
+                        target = pretrain_kwargs["folder_name"] + '/iter_' + str(-1) + '/' + pretrain_kwargs['name'] + '.ckpt'
                         checkpoint = {
                             "state_dict": {name: param for name, param in
                                         self._model.fusion_transformer.state_dict().items()}
                         }
                         torch.save(checkpoint, os.path.join("./", "pretrained.ckpt"))
                         s3 = boto3.resource('s3')
-                        s3.Bucket('automl-benchmark-bingzzhu').upload_file('./pretrained.ckpt', target)
+                        s3.Bucket(pretrain_kwargs['bucket_name']).upload_file('./pretrained.ckpt', target)
                         break
                     except:
                         pass

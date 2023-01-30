@@ -842,13 +842,14 @@ class TabularPredictor:
         aux_kwargs = {}
         if fit_weighted_ensemble is False:
             aux_kwargs['fit_weighted_ensemble'] = False
+        pretrain_kwargs = kwargs["pretrain_kwargs"] if "pretrain_kwargs" in kwargs else None
         self.save(silent=True)  # Save predictor to disk to enable prediction and training after interrupt
         self._learner.fit(X=train_data, X_val=tuning_data, X_unlabeled=unlabeled_data,
                           holdout_frac=holdout_frac, num_bag_folds=num_bag_folds, num_bag_sets=num_bag_sets,
                           num_stack_levels=num_stack_levels,
                           hyperparameters=hyperparameters, core_kwargs=core_kwargs, aux_kwargs=aux_kwargs,
                           time_limit=time_limit, infer_limit=infer_limit, infer_limit_batch_size=infer_limit_batch_size,
-                          verbosity=verbosity, use_bag_holdout=use_bag_holdout, is_pretrain=kwargs["is_pretrain"])
+                          verbosity=verbosity, use_bag_holdout=use_bag_holdout, pretrain_kwargs=pretrain_kwargs)
         self._set_post_fit_vars()
 
         self._post_fit(
@@ -2996,7 +2997,7 @@ class TabularPredictor:
             feature_generator='auto',
             unlabeled_data=None,
             _feature_generator_kwargs=None,
-            is_pretrain=False,
+            pretrain_kwargs=None,
         )
 
         kwargs = self._validate_fit_extra_kwargs(kwargs, extra_valid_keys=list(fit_kwargs_default.keys()))

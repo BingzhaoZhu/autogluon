@@ -96,7 +96,7 @@ class AutoTrainer(AbstractTrainer):
                                        infer_limit=infer_limit,
                                        infer_limit_batch_size=infer_limit_batch_size,
                                        groups=groups,
-                                       is_pretrain=kwargs["is_pretrain"])
+                                       pretrain_kwargs=kwargs["pretrain_kwargs"] if "pretrain_kwargs" in kwargs else None)
 
     def construct_model_templates_distillation(self, hyperparameters, **kwargs):
         path = kwargs.pop('path', self.path)
